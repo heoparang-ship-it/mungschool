@@ -2,32 +2,29 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>멍스쿨 MVP v2</title>
+<title>멍스쿨 MVP v3</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   body { font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif; background:#111; overflow:hidden;
          touch-action:none; user-select:none; -webkit-user-select:none; }
-  #cam { position:fixed; inset:0; width:100vw; height:100vh; object-fit:cover; }
+  #cam { position:fixed; inset:0; width:100vw; height:100vh; object-fit:cover; background:#111; }
   #cam.mirror { transform:scaleX(-1); }
   #fx    { position:fixed; inset:0; width:100vw; height:100vh; pointer-events:none; z-index:2; }
   #stage { position:fixed; inset:0; width:100vw; height:100vh; pointer-events:none; z-index:3; }
   #waveStrip { position:fixed; left:0; right:0; bottom:0; width:100vw; height:34px; z-index:4; pointer-events:none; }
   #edgeGlow { position:fixed; inset:0; pointer-events:none; z-index:5; opacity:0;
               box-shadow:inset 0 0 70px 12px rgba(255,159,67,.85); transition:opacity .12s; }
-  /* ── 상단 미니 UI: 상태 점 4 + 카메라 전환 ── */
   #top { position:fixed; top:10px; left:50%; transform:translateX(-50%); display:flex; gap:10px;
          align-items:center; z-index:10; background:rgba(15,17,24,.55); border-radius:20px;
          padding:7px 12px; backdrop-filter:blur(6px); }
   .dot { width:9px; height:9px; border-radius:50%; background:#555; }
   .dot.on { background:#37d67a; } .dot.off { background:#e05252; }
   #flip { border:0; background:none; font-size:17px; line-height:1; cursor:pointer; padding:0 2px; }
-  /* ── 견종 아이콘 3개 ── */
   #breeds { position:fixed; top:52px; left:50%; transform:translateX(-50%); display:flex; gap:10px; z-index:10; }
   #breeds button { width:46px; height:46px; border-radius:50%; border:2px solid transparent;
                    background:rgba(15,17,24,.55); cursor:pointer; padding:4px; }
   #breeds button.sel { border-color:#ff9f43; background:rgba(255,159,67,.25); }
-  /* ── 접이식 드로어 ── */
   #more { position:fixed; right:12px; bottom:44px; z-index:11; width:40px; height:40px; border-radius:50%;
           border:0; background:rgba(15,17,24,.6); color:#eee; font-size:19px; cursor:pointer; }
   #drawer { position:fixed; right:12px; bottom:92px; z-index:11; width:230px; display:none;
@@ -41,7 +38,6 @@
   #drawer input[type=range] { width:100%; }
   #legend { color:#bbb; font-size:12px; margin-bottom:6px; letter-spacing:.5px; }
   #folder { margin-top:8px; font-size:9px; color:#788; border-top:1px solid #333; padding-top:5px; }
-  /* ── 순간 이펙트 요소들 ── */
   #wordPop { position:fixed; z-index:20; pointer-events:none; opacity:0; font-size:min(15vw,74px);
              font-weight:900; color:#ff9f43; text-shadow:0 2px 14px rgba(0,0,0,.55); white-space:nowrap; }
   #mood { position:fixed; z-index:8; pointer-events:none; opacity:0; font-size:34px;
@@ -50,15 +46,20 @@
            background:rgba(15,17,24,.8); color:#eee; font-size:12px; padding:6px 12px; border-radius:14px;
            opacity:0; transition:opacity .25s; }
   #coach { position:fixed; inset:0; z-index:30; display:flex; align-items:center; justify-content:center;
-           background:rgba(0,0,0,.45); color:#fff; font-size:min(5.4vw,24px); font-weight:800;
-           text-align:center; line-height:1.8; transition:opacity .6s; pointer-events:none; }
+           background:rgba(0,0,0,.45); color:#fff; font-size:min(5vw,22px); font-weight:800;
+           text-align:center; line-height:1.9; transition:opacity .6s; pointer-events:none; }
   #statsOv { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:25; display:none;
              background:rgba(15,17,24,.88); color:#ffce7a; font-size:15px; font-weight:800;
              padding:14px 22px; border-radius:16px; letter-spacing:.5px; }
+  #camFail { position:fixed; inset:0; z-index:40; display:none; flex-direction:column; gap:14px;
+             align-items:center; justify-content:center; background:rgba(10,12,18,.92); color:#fff;
+             font-size:17px; font-weight:700; text-align:center; line-height:1.7; }
+  #camFail button { border:0; border-radius:12px; padding:12px 26px; font-size:16px; font-weight:800;
+                    background:#ff9f43; color:#26200f; cursor:pointer; }
 </style>
 </head>
 <body>
-<video id="cam" autoplay playsinline muted></video>
+<video id="cam" autoplay playsinline webkit-playsinline muted></video>
 <canvas id="fx"></canvas>
 <canvas id="stage"></canvas>
 <canvas id="waveStrip"></canvas>
@@ -67,6 +68,8 @@
 <div id="mood"></div>
 <div id="toast"></div>
 <div id="statsOv"></div>
+<div id="camFail">카메라를 켤 수 없어요<br>권한을 허용했는지 확인해 주세요<br>
+  <button id="retryCam">카메라 다시 시도</button></div>
 
 <div id="top">
   <div class="dot" id="dCam" data-n="카메라"></div>
@@ -95,28 +98,26 @@
     <button data-c="sit">앉아</button><button data-c="down">엎드려</button><button data-c="paw">손</button>
     <button data-c="stay">기다려</button><button data-c="praise">옳지</button><button data-c="come">이리와</button>
   </div>
-  <label>크기 <input type="range" id="rS" min="0.4" max="2.2" step="0.05" value="1"></label>
-  <label>좌우 <input type="range" id="rX" min="-3" max="3" step="0.1" value="0"></label>
-  <label>높이 <input type="range" id="rY" min="-2" max="1" step="0.05" value="-0.9"></label>
+  <label>크기 <input type="range" id="rS" min="0.4" max="2.5" step="0.05" value="1"></label>
   <div id="folder">Documents › claude › Projects › 멍스쿨</div>
 </div>
 
-<div id="coach">📷 강아지가 나올 곳을 비추고<br>🗣 "앉아!" 라고 말해보세요<br>👋 손짓도 알아들어요</div>
+<div id="coach">📷 강아지가 나올 곳을 비추고<br>👆 빈 곳을 탭하면 그 자리로 가요<br>🗣 "앉아!" — 👋 손짓도 알아들어요</div>
 
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 import { FilesetResolver, GestureRecognizer, FaceDetector }
   from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
 
-/* ─────────── 견종 성격 파라미터 ─────────── */
+/* ─────────── 견종 성격 파라미터 (scale = 견종 실제 비율) ─────────── */
 const BREEDS = {
-  chihuahua: { name:'치와와',   obey:0.55, gain:0.05, sulky:0.75, attentionMs:900,  energy:1.3,
+  chihuahua: { name:'치와와',   scale:0.45, obey:0.55, gain:0.05, sulky:0.75, attentionMs:900,  energy:1.3,
     colors:{ body:0xE8C9A0, ear:0xD4A97C, muzzle:0xF3E3C8, belly:0xF7ECD9 },
     size:{ body:[0.72,0.62,0.9], head:0.44, earType:'big-up', legLen:0.42, legR:0.075, tail:'thin' } },
-  frenchie:  { name:'프렌치 불독', obey:0.7, gain:0.06, sulky:0.35, attentionMs:1200, energy:0.8,
+  frenchie:  { name:'프렌치 불독', scale:0.62, obey:0.7, gain:0.06, sulky:0.35, attentionMs:1200, energy:0.8,
     colors:{ body:0x8A8580, ear:0x6E6963, muzzle:0x57524D, belly:0xBDB8B2 },
     size:{ body:[1.05,0.78,1.05], head:0.55, earType:'bat', legLen:0.36, legR:0.11, tail:'stub' } },
-  retriever: { name:'리트리버', obey:0.92, gain:0.03, sulky:0.05, attentionMs:500,  energy:1.0,
+  retriever: { name:'리트리버', scale:0.8, obey:0.92, gain:0.03, sulky:0.05, attentionMs:500,  energy:1.0,
     colors:{ body:0xD9A353, ear:0xB9832F, muzzle:0xC98F3B, belly:0xEBCB90 },
     size:{ body:[1.0,0.75,1.25], head:0.52, earType:'floppy', legLen:0.5, legR:0.095, tail:'long' } },
 };
@@ -130,12 +131,11 @@ function toast(t, ms=1400) {
   const e = $('toast'); e.textContent = t; e.style.opacity = 1;
   clearTimeout(toast._t); toast._t = setTimeout(()=>e.style.opacity = 0, ms);
 }
-function mood(emoji, ms=1800) {   // 강아지 머리 위 상태 버블
+function mood(emoji, ms=1800) {
   const e = $('mood'); e.textContent = emoji; e.style.opacity = 1;
-  e.style.transform = 'translate(-50%,-100%) scale(1)';
   clearTimeout(mood._t); mood._t = setTimeout(()=>{ e.style.opacity = 0; }, ms);
 }
-function wordPop(text) {          // 인식 단어 팝 → 강아지에게 날아가 흡수
+function wordPop(text) {
   const el = $('wordPop');
   el.textContent = text;
   el.style.transition = 'none'; el.style.opacity = 1;
@@ -175,6 +175,7 @@ addEventListener('resize', sizeAll); sizeAll();
 /* ─────────── 만화풍 강아지 ─────────── */
 let dog = null, parts = null, spawnT = 1;
 function toon(c) { return new THREE.MeshToonMaterial({ color:c }); }
+function dogScale() { return placement.s * BREEDS[breedKey].scale; }
 function buildDog(key, poof=false) {
   if (dog) scene.remove(dog);
   const B = BREEDS[key], S = B.size, C = B.colors;
@@ -238,7 +239,6 @@ function buildDog(key, poof=false) {
   tail.add(tg); tail.position.set(0, S.body[1]*0.3, -S.body[2]*0.5); tail.rotation.x = -0.7;
   body.add(tail); parts.tail = tail;
 
-  // 바닥 앵커 매트 (AR 존재감): 그림자 + 은은한 링
   const sh = new THREE.Mesh(new THREE.CircleGeometry(0.9, 24),
     new THREE.MeshBasicMaterial({ color:0x000000, transparent:true, opacity:0.25 }));
   sh.rotation.x = -Math.PI/2; sh.position.y = 0.01; sh.scale.set(S.body[0]+0.3, S.body[2]+0.2, 1);
@@ -252,7 +252,7 @@ function buildDog(key, poof=false) {
   applyPlacement();
   if (!(key in trainLv)) trainLv[key] = 0;
   poseNow('stand');
-  if (poof) {   // 등장: 펑 연기 + 바운스 스케일인
+  if (poof) {
     spawnT = 0;
     const p = dogScreenPos();
     emit('puff', p.x, p.y, 16);
@@ -286,18 +286,18 @@ function tickPose(dt) {
   }
 }
 
-/* ─────────── 생동감(시선·꼬리·귀·깜빡임) ─────────── */
+/* ─────────── 생동감 ─────────── */
 let facePos = null, faceSeen = 0, gazeCur = new THREE.Vector3(0,1,6), gazeTgt = new THREE.Vector3(0,1,6);
 let wagPower = 0, earPerk = 0, blinkT = 0, nextBlink = 2, hopT = -1, sulkYaw = 0;
 function tickLife(dt, t) {
   if (facePos && t - faceSeen < 1.5) gazeTgt.set((0.5 - facePos.x)*7, (0.55 - facePos.y)*4 + 1, 5);
   else if (Math.floor(t/2.5) % 3 === 0) gazeTgt.set(Math.sin(t*0.7)*3, 0.8, 5);
-  else gazeTgt.set(0, 1.2, 6);                       // 후면 카메라: 카메라(=사용자)를 바라봄
+  else gazeTgt.set(0, 1.2, 6);
   gazeCur.lerp(gazeTgt, Math.min(1, dt*3.5));
   const hp = new THREE.Vector3(); parts.head.getWorldPosition(hp);
   const dir = gazeCur.clone().sub(hp);
   const yaw = Math.atan2(dir.x, dir.z), pitch = Math.atan2(dir.y, Math.hypot(dir.x, dir.z));
-  parts.head.rotation.y = THREE.MathUtils.clamp(yaw, -0.65, 0.65) + sulkYaw;
+  parts.head.rotation.y = THREE.MathUtils.clamp(yaw - dog.rotation.y, -0.65, 0.65) + sulkYaw;
   parts.head.rotation.x += THREE.MathUtils.clamp(-pitch*0.55, -0.35, 0.3);
   parts.body.scale.y = 1 + Math.sin(t*2.2*BREEDS[breedKey].energy)*0.018;
   wagPower = Math.max(0.15, wagPower - dt*0.35);
@@ -310,16 +310,51 @@ function tickLife(dt, t) {
   blinkT -= dt;
   if (blinkT < -nextBlink) { blinkT = 0.13; nextBlink = 1.5 + Math.random()*3.5; }
   for (const nm of ['eyeL','eyeR']) parts[nm].scale.y = blinkT > 0 ? 0.12 : 1;
-  if (hopT >= 0) {
+  if (hopT >= 0 && !moveAnim) {
     hopT += dt*3;
     dog.position.y = placement.y + Math.abs(Math.sin(hopT*Math.PI))*0.35*(hopT<2?1:0);
     if (hopT > 2) { hopT = -1; dog.position.y = placement.y; }
   }
-  parts.anchor.material.opacity = 0.3 + Math.sin(t*2)*0.12;   // 앵커 링 맥동
-  if (spawnT < 1) {                                            // 등장 바운스
+  parts.anchor.material.opacity = 0.3 + Math.sin(t*2)*0.12;
+  if (spawnT < 1) {
     spawnT = Math.min(1, spawnT + dt*2.2);
     const k = spawnT, over = 1 + 0.3*Math.sin(k*Math.PI);
-    dog.scale.setScalar(placement.s * k * over);
+    dog.scale.setScalar(dogScale() * k * over);
+  }
+}
+
+/* ─────────── 탭한 자리로 이동 (지정 위치 배치) ─────────── */
+let moveAnim = null;
+const raycaster = new THREE.Raycaster(), zPlane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
+function screenToWorld(sx, sy) {
+  raycaster.setFromCamera(new THREE.Vector2((sx/innerWidth)*2-1, -(sy/innerHeight)*2+1), camera3);
+  const pt = new THREE.Vector3();
+  return raycaster.ray.intersectPlane(zPlane, pt) ? pt : null;
+}
+function moveDogTo(wx, wy) {
+  wx = THREE.MathUtils.clamp(wx, -3.6, 3.6);
+  wy = THREE.MathUtils.clamp(wy, -2.4, 1.2);
+  moveAnim = { fx:dog.position.x, fy:dog.position.y, tx:wx, ty:wy, t:0,
+               dur: Math.max(0.35, Math.hypot(wx-dog.position.x, wy-dog.position.y)*0.28) };
+  dog.rotation.y = wx < dog.position.x ? -0.9 : 0.4;   // 이동 방향으로 살짝 회전
+  poseNow('stand'); wagPower = 0.5;
+}
+function tickMove(dt) {
+  if (!moveAnim) return;
+  moveAnim.t += dt / moveAnim.dur;
+  const k = Math.min(1, moveAnim.t);
+  const e = k<0.5 ? 2*k*k : 1-Math.pow(-2*k+2,2)/2;
+  const x = moveAnim.fx + (moveAnim.tx-moveAnim.fx)*e;
+  const y = moveAnim.fy + (moveAnim.ty-moveAnim.fy)*e;
+  const hop = Math.abs(Math.sin(k*Math.PI*3)) * 0.07;   // 총총총
+  dog.position.set(x, y + hop, 0);
+  if (k >= 1) {
+    placement.x = moveAnim.tx; placement.y = moveAnim.ty;
+    localStorage.setItem('mung-place-v3', JSON.stringify(placement));
+    dog.position.set(placement.x, placement.y, 0);
+    dog.rotation.y = -0.25;
+    const b = dogBase(); emit('puff', b.x, b.y, 6);
+    moveAnim = null;
   }
 }
 
@@ -340,7 +375,7 @@ function command(cmd, src) {
   if (src === 'voice') { waveFlash = 1; wordPop(cmdName(cmd) + '!'); }
   state = 'attend'; earPerk = 1; sulkYaw = 0;
   mood('❗', B.attentionMs + 400);
-  sparkleEyes();                                    // 아이컨택 반짝
+  sparkleEyes();
   gazeTgt.set(facePos ? (0.5-facePos.x)*7 : 0, 1.2, 5.5);
   busyUntil = t + B.attentionMs + 600;
   setTimeout(() => {
@@ -351,7 +386,7 @@ function command(cmd, src) {
       wagPower = 0.7; state = 'performed';
       const p = dogScreenPos();
       emit('star', p.x, p.y, 12); groundPulse = { t0: performance.now() };
-      if (cmd === 'stay') mood('👌', 1500); else mood('✨', 1500);
+      mood(cmd === 'stay' ? '👌' : '✨', 1500);
       awaitingPraise = true; praiseDeadline = performance.now() + 5000;
       if (firstSuccess) { firstSuccess = false; setTimeout(()=>wordPop('옳지! 해보세요'), 900); }
       if (trainLv[breedKey] % 5 === 0) levelUp();
@@ -390,53 +425,64 @@ function levelUp() {
 function cmdName(c) { return {sit:'앉아', down:'엎드려', paw:'손', stay:'기다려', come:'이리와', praise:'칭찬'}[c] || c; }
 
 /* ─────────── 배치 ─────────── */
-const placement = JSON.parse(localStorage.getItem('mung-place') || '{"x":0,"y":-0.9,"s":1}');
+const placement = JSON.parse(localStorage.getItem('mung-place-v3') || '{"x":0,"y":-0.9,"s":1}');
 function applyPlacement() {
   if (!dog) return;
   dog.position.set(placement.x, placement.y, 0);
-  if (spawnT >= 1) dog.scale.setScalar(placement.s);
+  if (spawnT >= 1) dog.scale.setScalar(dogScale());
   dog.rotation.y = -0.25;
 }
-for (const [id,k] of [['rX','x'],['rY','y'],['rS','s']]) {
-  $(id).value = placement[k];
-  $(id).addEventListener('input', e => { placement[k] = +e.target.value; applyPlacement();
-    localStorage.setItem('mung-place', JSON.stringify(placement)); });
-}
+$('rS').value = placement.s;
+$('rS').addEventListener('input', e => { placement.s = +e.target.value; applyPlacement();
+  localStorage.setItem('mung-place-v3', JSON.stringify(placement)); });
 function dogScreenPos() {
   if (!dog) return { x:innerWidth/2, y:innerHeight/2 };
   const v = new THREE.Vector3(); parts.head.getWorldPosition(v); v.project(camera3);
   return { x:(v.x*0.5+0.5)*innerWidth, y:(-v.y*0.5+0.5)*innerHeight };
 }
-function dogBase() {   // 발밑 중심 + 픽셀 반경 (링 게이지용)
+function dogBase() {
   const v = new THREE.Vector3(dog.position.x, dog.position.y, 0); v.project(camera3);
   const x = (v.x*0.5+0.5)*innerWidth, y = (-v.y*0.5+0.5)*innerHeight;
-  const v2 = new THREE.Vector3(dog.position.x + placement.s*1.1, dog.position.y, 0); v2.project(camera3);
-  const r = Math.abs((v2.x*0.5+0.5)*innerWidth - x);
+  const v2 = new THREE.Vector3(dog.position.x + dogScale()*1.1, dog.position.y, 0); v2.project(camera3);
+  const r = Math.max(30, Math.abs((v2.x*0.5+0.5)*innerWidth - x));
   return { x, y, r };
 }
 
-/* ─────────── 카메라 (모바일=후면 기본, 전환 가능) ─────────── */
+/* ─────────── 카메라 (모바일=후면 기본 · 재생 강제 · 폴백) ─────────── */
 const video = $('cam');
 let videoReady = false, facing = isMobile ? 'environment' : 'user', mirrored = !isMobile, stream = null;
 async function startCamera() {
   if (stream) stream.getTracks().forEach(tr => tr.stop());
-  videoReady = false;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: facing === 'environment' ? { ideal:'environment' } : 'user',
-               width:{ ideal:1280 }, height:{ ideal:720 } }, audio: false });
-    video.srcObject = stream;
-    mirrored = facing === 'user';
-    video.classList.toggle('mirror', mirrored);
-    video.onloadeddata = () => { videoReady = true; dot('dCam', true); };
-  } catch(e) { dot('dCam', false); toast('카메라 실패 — ⋯ 버튼으로 시연 가능'); }
+  videoReady = false; $('camFail').style.display = 'none';
+  const wants = [
+    { video: { facingMode: facing === 'environment' ? { ideal:'environment' } : 'user',
+               width:{ ideal:1280 }, height:{ ideal:720 } }, audio:false },
+    { video: true, audio:false },                       // 폴백: 아무 카메라나
+  ];
+  let ok = false;
+  for (const c of wants) {
+    try { stream = await navigator.mediaDevices.getUserMedia(c); ok = true; break; }
+    catch(e) {}
+  }
+  if (!ok) { dot('dCam', false); $('camFail').style.display = 'flex'; return; }
+  video.srcObject = stream;
+  // 실제 잡힌 카메라 방향으로 미러 여부 결정
+  const st = stream.getVideoTracks()[0].getSettings();
+  mirrored = !(st.facingMode && st.facingMode.includes('environment'));
+  video.classList.toggle('mirror', mirrored);
+  try { await video.play(); } catch(e) {}               // 자동재생 강제
+  video.onloadeddata = () => { videoReady = true; dot('dCam', true); };
+  if (video.readyState >= 2) { videoReady = true; dot('dCam', true); }
 }
+$('retryCam').addEventListener('click', startCamera);
 $('flip').addEventListener('click', () => {
   facing = facing === 'environment' ? 'user' : 'environment';
   toast(facing === 'environment' ? '후면 카메라' : '전면 카메라');
   startCamera();
 });
 startCamera();
+// 자동재생이 막힌 경우: 첫 터치에서 재생 재시도
+document.body.addEventListener('pointerdown', () => { if (video.paused) video.play().catch(()=>{}); });
 function videoToScreen(nx, ny) {
   const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
   const W = innerWidth, H = innerHeight;
@@ -446,7 +492,7 @@ function videoToScreen(nx, ny) {
   return { x: mirrored ? W - px : px, y: oy + ny*dh };
 }
 
-/* ─────────── 음성: 파동 스트립 + 테두리 글로우 ─────────── */
+/* ─────────── 음성 파동 + 테두리 글로우 ─────────── */
 let analyser = null, waveData = null, waveFlash = 0, volSmooth = 0;
 navigator.mediaDevices.getUserMedia({ audio:true }).then(s => {
   const ac = new (window.AudioContext || window.webkitAudioContext)();
@@ -465,7 +511,7 @@ function drawWave(dt) {
   const vol = Math.sqrt(sum / waveData.length);
   volSmooth += (vol - volSmooth) * 0.25;
   if (vol > 0.06) earPerk = Math.max(earPerk, Math.min(1, vol*6));
-  $('edgeGlow').style.opacity = Math.min(0.85, volSmooth*5 + waveFlash*0.5);  // 테두리 글로우
+  $('edgeGlow').style.opacity = Math.min(0.85, volSmooth*5 + waveFlash*0.5);
   const active = vol > 0.035;
   const col = waveFlash > 0.05 ? '#ffce7a' : (active ? '#ff9f43' : 'rgba(160,168,190,.55)');
   wctx.lineWidth = 2; wctx.strokeStyle = col;
@@ -552,7 +598,7 @@ function tickVision(t) {
                          icon: known ? GESTURE_KO[g.categoryName] : '',
                          known, score: g ? g.score : 0, ts: performance.now() };
     const now = performance.now();
-    if (known) {                                   // 0.5초 유지 → 판정 링이 차오른 뒤 발동
+    if (known) {
       if (g.categoryName !== holdName) { holdName = g.categoryName; holdStart = now; }
       const held = now - holdStart;
       if (handSnap) handSnap.hold = Math.min(1, held/500);
@@ -563,7 +609,7 @@ function tickVision(t) {
       }
     } else { holdName = null; if (!g) lastFired = ''; }
   }
-  if (faceDet && mirrored && frameNo % fEvery === 0) {   // 얼굴 추적은 전면 카메라에서만
+  if (faceDet && mirrored && frameNo % fEvery === 0) {
     const res = faceDet.detectForVideo(video, t+0.1);
     const d = res.detections?.[0];
     if (d) {
@@ -574,7 +620,7 @@ function tickVision(t) {
   }
 }
 
-/* ─────────── 파티클 시스템 ─────────── */
+/* ─────────── 파티클 ─────────── */
 const P = [];
 const P_GLYPH = { star:'✦', heart:'🧡', bone:'🦴', spark:'✧' };
 function emit(type, x, y, n) {
@@ -606,7 +652,7 @@ function drawParticles(dt) {
 let ringBursts = [];
 function ringBurst(x, y, r) { ringBursts.push({ x, y, r, t0:performance.now() }); }
 
-/* ─────────── FX 캔버스 (스켈레톤·링·게이지) ─────────── */
+/* ─────────── FX 캔버스 ─────────── */
 function sparkleEyes() {
   const p = dogScreenPos();
   emit('spark', p.x - 14, p.y - 6, 3); emit('spark', p.x + 14, p.y - 6, 3);
@@ -614,10 +660,8 @@ function sparkleEyes() {
 function drawFx(dt) {
   fctx.clearRect(0, 0, fxCv.width, fxCv.height);
   const now = performance.now();
-
-  // 손 스켈레톤 + 판정 링
   if (handSnap && now - handSnap.ts < 350) {
-    const { pts, known, hold, icon, score } = handSnap;
+    const { pts, known, hold, icon } = handSnap;
     const col = known ? '#ff9f43' : 'rgba(120,200,255,.9)';
     fctx.lineWidth = 3; fctx.strokeStyle = col;
     fctx.shadowBlur = 8; fctx.shadowColor = col;
@@ -630,14 +674,13 @@ function drawFx(dt) {
       fctx.fillStyle = i===0 ? '#fff' : col; fctx.fill();
     }
     const c = handCenter();
-    if (known && c) {                       // 판정 링: 차오르면 발동
+    if (known && c) {
       fctx.beginPath();
       fctx.arc(c.x, c.y, 44, -Math.PI/2, -Math.PI/2 + Math.PI*2*(hold||0));
       fctx.strokeStyle = '#ffce7a'; fctx.lineWidth = 5; fctx.stroke();
       if (icon) { fctx.font = '28px sans-serif'; fctx.fillText(icon, c.x - 14, c.y - 54); }
     }
   }
-  // 명령 발동 링
   if (ringFx) {
     const k = (now - ringFx.t0)/600;
     if (k < 1) {
@@ -647,14 +690,12 @@ function drawFx(dt) {
   }
   if (dog) {
     const b = dogBase();
-    // 훈련 게이지 (발밑 링, 5칸 채우면 레벨업)
     const frac = (trainLv[breedKey] % 5) / 5;
     if (frac > 0) {
       fctx.beginPath();
       fctx.arc(b.x, b.y, b.r*0.85, -Math.PI/2, -Math.PI/2 + Math.PI*2*frac);
       fctx.strokeStyle = 'rgba(255,159,67,.9)'; fctx.lineWidth = 5; fctx.stroke();
     }
-    // 칭찬 타이밍 링 (5초간 줄어듦)
     if (awaitingPraise) {
       const remain = Math.max(0, (praiseDeadline - now)/5000);
       fctx.beginPath();
@@ -665,7 +706,6 @@ function drawFx(dt) {
       fctx.fillText('🧡', b.x - 11, b.y - b.r*0.9 - b.r*1.15 - 8);
       if (remain <= 0) awaitingPraise = false;
     }
-    // 성공 바닥 펄스
     if (groundPulse) {
       const k = (now - groundPulse.t0)/700;
       if (k < 1) {
@@ -674,7 +714,6 @@ function drawFx(dt) {
       } else groundPulse = null;
     }
   }
-  // 레벨업 링 파열
   ringBursts = ringBursts.filter(rb => {
     const k = (now - rb.t0)/800;
     if (k >= 1) return false;
@@ -683,18 +722,17 @@ function drawFx(dt) {
     return true;
   });
   drawParticles(dt);
-  // 상태 버블 위치 갱신
   const hp = dogScreenPos();
   const m = $('mood');
   m.style.left = hp.x + 'px'; m.style.top = (hp.y - 46) + 'px';
   m.style.transform = 'translate(-50%,-100%)';
 }
 
-/* ─────────── 터치: 쓰다듬기 / 길게 눌러 통계 ─────────── */
-let pressAt = 0, longTimer = null;
+/* ─────────── 터치: 쓰다듬기 / 이동 / 길게 눌러 통계 ─────────── */
+let pressAt = 0, pressXY = null, longTimer = null;
 addEventListener('pointerdown', e => {
-  if (e.target.closest('#top,#breeds,#more,#drawer')) return;
-  pressAt = performance.now();
+  if (e.target.closest('#top,#breeds,#more,#drawer,#camFail')) return;
+  pressAt = performance.now(); pressXY = [e.clientX, e.clientY];
   longTimer = setTimeout(() => {
     const s = $('statsOv');
     s.textContent = `성공 ${stats.ok}/${stats.cmd} · Lv ${1+Math.floor((trainLv[breedKey]||0)/5)} · ${fpsNow}fps`;
@@ -704,18 +742,23 @@ addEventListener('pointerdown', e => {
 addEventListener('pointerup', e => {
   clearTimeout(longTimer);
   $('statsOv').style.display = 'none';
-  if (e.target.closest('#top,#breeds,#more,#drawer')) return;
-  if (performance.now() - pressAt < 300) {
+  if (e.target.closest('#top,#breeds,#more,#drawer,#camFail')) return;
+  if (performance.now() - pressAt < 300 && pressXY &&
+      Math.hypot(e.clientX - pressXY[0], e.clientY - pressXY[1]) < 12) {
     const p = dogScreenPos();
-    if (Math.hypot(e.clientX - p.x, e.clientY - p.y) < 170) {   // 강아지 탭 = 쓰다듬기
+    const petR = Math.max(80, 190 * dogScale());
+    if (Math.hypot(e.clientX - p.x, e.clientY - p.y) < petR) {   // 강아지 탭 = 쓰다듬기
       wagPower = 1; earPerk = 1; mood('🧡', 1500);
       emit('heart', p.x, p.y, 8);
       if (Math.random() < 0.3) hopT = 0;
+    } else {                                                     // 빈 곳 탭 = 그 자리로 이동
+      const w = screenToWorld(e.clientX, e.clientY);
+      if (w) { moveDogTo(w.x, w.y); emit('spark', e.clientX, e.clientY, 5); }
     }
   }
 });
 
-/* ─────────── 미니 UI 동작 ─────────── */
+/* ─────────── 미니 UI ─────────── */
 $('more').addEventListener('click', () => $('drawer').classList.toggle('open'));
 document.querySelectorAll('#drawer .row button').forEach(b =>
   b.addEventListener('click', () => command(b.dataset.c, 'btn')));
@@ -735,7 +778,7 @@ document.querySelectorAll('.dot').forEach(d =>
 let prev = performance.now(), fpsAcc = 0, fpsN = 0, fpsAt = 0, fpsNow = 0;
 function loop(t) {
   const dt = Math.min(0.05, (t - prev)/1000); prev = t;
-  tickPose(dt); tickLife(dt, t/1000); tickVision(t);
+  tickPose(dt); tickLife(dt, t/1000); tickMove(dt); tickVision(t);
   drawFx(dt); drawWave(dt);
   renderer.render(scene, camera3);
   fpsAcc += 1/dt; fpsN++;
@@ -743,7 +786,7 @@ function loop(t) {
   requestAnimationFrame(loop);
 }
 buildDog(breedKey, true);
-setTimeout(() => { $('coach').style.opacity = 0; setTimeout(()=>$('coach').remove(), 700); }, 4200);
+setTimeout(() => { const c = $('coach'); c.style.opacity = 0; setTimeout(()=>c.remove(), 700); }, 4500);
 requestAnimationFrame(loop);
 </script>
 </body>
