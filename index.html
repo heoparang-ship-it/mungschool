@@ -2,184 +2,193 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>멍스쿨 MVP v1 — 견종별 성격 반응 AR 훈련 데모</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>멍스쿨 MVP v2</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif; background:#111; overflow:hidden; }
-  #cam { position:fixed; inset:0; width:100vw; height:100vh; object-fit:cover; transform:scaleX(-1); }
-  #hands { position:fixed; inset:0; width:100vw; height:100vh; pointer-events:none; z-index:2; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif; background:#111; overflow:hidden;
+         touch-action:none; user-select:none; -webkit-user-select:none; }
+  #cam { position:fixed; inset:0; width:100vw; height:100vh; object-fit:cover; }
+  #cam.mirror { transform:scaleX(-1); }
+  #fx    { position:fixed; inset:0; width:100vw; height:100vh; pointer-events:none; z-index:2; }
   #stage { position:fixed; inset:0; width:100vw; height:100vh; pointer-events:none; z-index:3; }
-  .panel { position:fixed; background:rgba(20,22,30,.82); color:#fff; border-radius:14px;
-           padding:12px 14px; backdrop-filter:blur(6px); font-size:13px; z-index:10; }
-  #topbar { top:12px; left:50%; transform:translateX(-50%); display:flex; gap:10px; align-items:center;
-            font-size:15px; font-weight:700; white-space:nowrap; }
-  #topbar .chip { font-size:11px; font-weight:500; padding:3px 8px; border-radius:20px; background:#333; }
-  .chip.on { background:#1e7d46; } .chip.off { background:#8a2b2b; }
-  #breeds { top:64px; left:50%; transform:translateX(-50%); display:flex; gap:8px; }
-  #breeds button, #cmds button {
-    border:0; border-radius:10px; padding:9px 14px; font-size:14px; font-weight:700;
-    background:#2b2f3d; color:#eee; cursor:pointer; }
-  #breeds button.sel { background:#ff9f43; color:#222; }
-  #guide { bottom:110px; left:50%; transform:translateX(-50%); font-size:22px; font-weight:800;
-           padding:14px 26px; border-radius:40px; background:rgba(255,159,67,.92); color:#26200f;
-           text-align:center; transition:opacity .3s; }
-  #cmds { bottom:16px; left:50%; transform:translateX(-50%); display:flex; gap:8px; }
-  #cmds button { background:#3a3f52; }
-  #cmds button:active { background:#ff9f43; color:#222; }
-  #log { right:12px; top:12px; width:262px; max-height:38vh; overflow-y:auto; font-size:12px; line-height:1.5; }
-  #log .r { color:#ffb0b0; } #log .g { color:#9be89b; } #log .y { color:#ffe08a; }
-  #stats { left:12px; top:12px; width:216px; line-height:1.7; }
-  #stats b { color:#ffce7a; }
-  /* ── 음성 파동 패널 ── */
-  #voicePanel { left:12px; bottom:212px; width:216px; }
-  #wave { width:100%; height:56px; display:block; border-radius:8px; background:rgba(0,0,0,.35); }
-  #voicePanel.hot #wave { box-shadow:0 0 0 2px #ff9f43, 0 0 18px rgba(255,159,67,.8); }
-  #vTxt { margin-top:6px; font-size:12px; color:#aaa; min-height:16px; }
-  #vTxt.hit { color:#ffce7a; font-weight:800; }
-  #settings { left:12px; bottom:16px; width:216px; }
-  #settings label { display:block; margin-top:6px; font-size:11px; color:#bbb; }
-  #settings input[type=range] { width:100%; }
-  #folder { margin-top:8px; font-size:10px; color:#8b8f9c; border-top:1px solid #333; padding-top:6px; }
-  #gestureLegend { right:12px; bottom:16px; width:262px; font-size:12px; line-height:1.7; }
-  #bubble { position:fixed; padding:8px 14px; background:#fff; color:#333; border-radius:16px;
-            font-weight:700; font-size:15px; z-index:9; display:none; box-shadow:0 2px 10px rgba(0,0,0,.3); }
-  h4 { font-size:12px; color:#ff9f43; margin-bottom:4px; }
+  #waveStrip { position:fixed; left:0; right:0; bottom:0; width:100vw; height:34px; z-index:4; pointer-events:none; }
+  #edgeGlow { position:fixed; inset:0; pointer-events:none; z-index:5; opacity:0;
+              box-shadow:inset 0 0 70px 12px rgba(255,159,67,.85); transition:opacity .12s; }
+  /* ── 상단 미니 UI: 상태 점 4 + 카메라 전환 ── */
+  #top { position:fixed; top:10px; left:50%; transform:translateX(-50%); display:flex; gap:10px;
+         align-items:center; z-index:10; background:rgba(15,17,24,.55); border-radius:20px;
+         padding:7px 12px; backdrop-filter:blur(6px); }
+  .dot { width:9px; height:9px; border-radius:50%; background:#555; }
+  .dot.on { background:#37d67a; } .dot.off { background:#e05252; }
+  #flip { border:0; background:none; font-size:17px; line-height:1; cursor:pointer; padding:0 2px; }
+  /* ── 견종 아이콘 3개 ── */
+  #breeds { position:fixed; top:52px; left:50%; transform:translateX(-50%); display:flex; gap:10px; z-index:10; }
+  #breeds button { width:46px; height:46px; border-radius:50%; border:2px solid transparent;
+                   background:rgba(15,17,24,.55); cursor:pointer; padding:4px; }
+  #breeds button.sel { border-color:#ff9f43; background:rgba(255,159,67,.25); }
+  /* ── 접이식 드로어 ── */
+  #more { position:fixed; right:12px; bottom:44px; z-index:11; width:40px; height:40px; border-radius:50%;
+          border:0; background:rgba(15,17,24,.6); color:#eee; font-size:19px; cursor:pointer; }
+  #drawer { position:fixed; right:12px; bottom:92px; z-index:11; width:230px; display:none;
+            background:rgba(15,17,24,.85); border-radius:14px; padding:12px; backdrop-filter:blur(6px);
+            color:#ddd; font-size:12px; }
+  #drawer.open { display:block; }
+  #drawer .row { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+  #drawer .row button { border:0; border-radius:8px; padding:7px 10px; font-size:13px; font-weight:700;
+                        background:#3a3f52; color:#eee; cursor:pointer; }
+  #drawer label { display:block; margin-top:5px; font-size:10px; color:#9aa; }
+  #drawer input[type=range] { width:100%; }
+  #legend { color:#bbb; font-size:12px; margin-bottom:6px; letter-spacing:.5px; }
+  #folder { margin-top:8px; font-size:9px; color:#788; border-top:1px solid #333; padding-top:5px; }
+  /* ── 순간 이펙트 요소들 ── */
+  #wordPop { position:fixed; z-index:20; pointer-events:none; opacity:0; font-size:min(15vw,74px);
+             font-weight:900; color:#ff9f43; text-shadow:0 2px 14px rgba(0,0,0,.55); white-space:nowrap; }
+  #mood { position:fixed; z-index:8; pointer-events:none; opacity:0; font-size:34px;
+          transition:opacity .25s, transform .25s; text-shadow:0 2px 8px rgba(0,0,0,.4); }
+  #toast { position:fixed; top:98px; left:50%; transform:translateX(-50%); z-index:20; pointer-events:none;
+           background:rgba(15,17,24,.8); color:#eee; font-size:12px; padding:6px 12px; border-radius:14px;
+           opacity:0; transition:opacity .25s; }
+  #coach { position:fixed; inset:0; z-index:30; display:flex; align-items:center; justify-content:center;
+           background:rgba(0,0,0,.45); color:#fff; font-size:min(5.4vw,24px); font-weight:800;
+           text-align:center; line-height:1.8; transition:opacity .6s; pointer-events:none; }
+  #statsOv { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:25; display:none;
+             background:rgba(15,17,24,.88); color:#ffce7a; font-size:15px; font-weight:800;
+             padding:14px 22px; border-radius:16px; letter-spacing:.5px; }
 </style>
 </head>
 <body>
 <video id="cam" autoplay playsinline muted></video>
-<canvas id="hands"></canvas>
+<canvas id="fx"></canvas>
 <canvas id="stage"></canvas>
-<div id="bubble"></div>
+<canvas id="waveStrip"></canvas>
+<div id="edgeGlow"></div>
+<div id="wordPop"></div>
+<div id="mood"></div>
+<div id="toast"></div>
+<div id="statsOv"></div>
 
-<div class="panel" id="topbar">멍스쿨 MVP v1 — 입양 전 견종 훈련 체험
-  <span class="chip off" id="cCam">카메라</span><span class="chip off" id="cMic">음성</span>
-  <span class="chip off" id="cHand">손짓</span><span class="chip off" id="cFace">얼굴</span>
-  <span class="chip" id="cFps">-fps</span>
+<div id="top">
+  <div class="dot" id="dCam" data-n="카메라"></div>
+  <div class="dot" id="dMic" data-n="음성"></div>
+  <div class="dot" id="dHand" data-n="손짓"></div>
+  <div class="dot" id="dFace" data-n="얼굴"></div>
+  <button id="flip" title="카메라 전환">🔄</button>
 </div>
 
-<div class="panel" id="breeds">
-  <button data-b="chihuahua">치와와 (난이도 상)</button>
-  <button data-b="frenchie">프렌치 불독 (중)</button>
-  <button data-b="retriever" class="sel">리트리버 (하)</button>
+<div id="breeds">
+  <button data-b="chihuahua" title="치와와">
+    <svg viewBox="0 0 40 40"><polygon points="7,20 12,2 19,15" fill="#D4A97C"/><polygon points="33,20 28,2 21,15" fill="#D4A97C"/><circle cx="20" cy="24" r="13" fill="#E8C9A0"/><circle cx="15" cy="22" r="2.2" fill="#222"/><circle cx="25" cy="22" r="2.2" fill="#222"/><circle cx="20" cy="28" r="2.6" fill="#4a3a2a"/></svg>
+  </button>
+  <button data-b="frenchie" title="프렌치 불독">
+    <svg viewBox="0 0 40 40"><ellipse cx="10" cy="9" rx="5.5" ry="8" fill="#6E6963"/><ellipse cx="30" cy="9" rx="5.5" ry="8" fill="#6E6963"/><circle cx="20" cy="24" r="13.5" fill="#8A8580"/><circle cx="15" cy="22" r="2.2" fill="#222"/><circle cx="25" cy="22" r="2.2" fill="#222"/><ellipse cx="20" cy="29" rx="4.5" ry="3" fill="#57524D"/></svg>
+  </button>
+  <button data-b="retriever" class="sel" title="리트리버">
+    <svg viewBox="0 0 40 40"><ellipse cx="8" cy="22" rx="5" ry="9" fill="#B9832F"/><ellipse cx="32" cy="22" rx="5" ry="9" fill="#B9832F"/><circle cx="20" cy="22" r="13" fill="#D9A353"/><circle cx="15" cy="20" r="2.2" fill="#222"/><circle cx="25" cy="20" r="2.2" fill="#222"/><ellipse cx="20" cy="27" rx="4" ry="3" fill="#C98F3B"/></svg>
+  </button>
 </div>
 
-<div class="panel" id="stats">
-  <h4>훈련 현황</h4>
-  <div>견종: <b id="sBreed">리트리버</b></div>
-  <div>상태: <b id="sState">대기 중</b></div>
-  <div>명령 인식: <b id="sCmd">0</b>회</div>
-  <div>수행 성공: <b id="sOk">0</b>회 (<b id="sRate">-</b>)</div>
-  <div>훈련 레벨: <b id="sLv">1</b> <span id="sLvBar" style="color:#ff9f43"></span></div>
-</div>
-
-<div class="panel" id="log"><h4>이벤트 로그</h4><div id="logBody"></div></div>
-
-<div class="panel" id="voicePanel">
-  <h4>음성 입력 (실시간 파동)</h4>
-  <canvas id="wave" width="192" height="56"></canvas>
-  <div id="vTxt">마이크 대기 중…</div>
-</div>
-
-<div class="panel" id="guide">"앉아!" 라고 크게 말해보세요</div>
-
-<div class="panel" id="cmds">
-  <button data-c="sit">앉아</button><button data-c="down">엎드려</button>
-  <button data-c="paw">손</button><button data-c="stay">기다려</button>
-  <button data-c="praise">옳지! (칭찬)</button><button data-c="come">이리와</button>
-</div>
-
-<div class="panel" id="settings">
-  <h4>설치 조정 (행사장 캘리브레이션)</h4>
-  <label>강아지 크기 <input type="range" id="rS" min="0.4" max="2.2" step="0.05" value="1"></label>
-  <label>좌우 위치 <input type="range" id="rX" min="-3" max="3" step="0.1" value="0"></label>
+<button id="more">⋯</button>
+<div id="drawer">
+  <div id="legend">✋기다려 ☝️앉아 ✊엎드려 ✌️손 👍칭찬</div>
+  <div class="row">
+    <button data-c="sit">앉아</button><button data-c="down">엎드려</button><button data-c="paw">손</button>
+    <button data-c="stay">기다려</button><button data-c="praise">옳지</button><button data-c="come">이리와</button>
+  </div>
+  <label>크기 <input type="range" id="rS" min="0.4" max="2.2" step="0.05" value="1"></label>
+  <label>좌우 <input type="range" id="rX" min="-3" max="3" step="0.1" value="0"></label>
   <label>높이 <input type="range" id="rY" min="-2" max="1" step="0.05" value="-0.9"></label>
-  <div id="folder">작업 폴더: Documents › claude › Projects › 멍스쿨</div>
+  <div id="folder">Documents › claude › Projects › 멍스쿨</div>
 </div>
 
-<div class="panel" id="gestureLegend">
-  <h4>손짓 명령 (카메라에 손을 보여주세요)</h4>
-  ✋ 손바닥 펴기 → 기다려<br>
-  ☝️ 검지 들기 → 앉아<br>
-  ✊ 주먹 → 엎드려<br>
-  ✌️ 브이 → 손<br>
-  👍 엄지척 → 옳지! (칭찬)
-</div>
+<div id="coach">📷 강아지가 나올 곳을 비추고<br>🗣 "앉아!" 라고 말해보세요<br>👋 손짓도 알아들어요</div>
 
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 import { FilesetResolver, GestureRecognizer, FaceDetector }
   from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
 
-/* ─────────── 견종 성격 파라미터 (성격 반응 엔진) ─────────── */
+/* ─────────── 견종 성격 파라미터 ─────────── */
 const BREEDS = {
   chihuahua: { name:'치와와',   obey:0.55, gain:0.05, sulky:0.75, attentionMs:900,  energy:1.3,
     colors:{ body:0xE8C9A0, ear:0xD4A97C, muzzle:0xF3E3C8, belly:0xF7ECD9 },
-    size:{ body:[0.72,0.62,0.9], head:0.44, earType:'big-up', legLen:0.42, legR:0.075, tail:'thin' },
-    failText:'…(못 들은 척, 삐졌어요)', desc:'예민·경계 — 신뢰를 쌓아야 말을 들어요' },
+    size:{ body:[0.72,0.62,0.9], head:0.44, earType:'big-up', legLen:0.42, legR:0.075, tail:'thin' } },
   frenchie:  { name:'프렌치 불독', obey:0.7, gain:0.06, sulky:0.35, attentionMs:1200, energy:0.8,
     colors:{ body:0x8A8580, ear:0x6E6963, muzzle:0x57524D, belly:0xBDB8B2 },
-    size:{ body:[1.05,0.78,1.05], head:0.55, earType:'bat', legLen:0.36, legR:0.11, tail:'stub' },
-    failText:'…(고집부리며 딴청 피워요)', desc:'고집·능청 — 흥미가 생기면 집중해요' },
+    size:{ body:[1.05,0.78,1.05], head:0.55, earType:'bat', legLen:0.36, legR:0.11, tail:'stub' } },
   retriever: { name:'리트리버', obey:0.92, gain:0.03, sulky:0.05, attentionMs:500,  energy:1.0,
     colors:{ body:0xD9A353, ear:0xB9832F, muzzle:0xC98F3B, belly:0xEBCB90 },
-    size:{ body:[1.0,0.75,1.25], head:0.52, earType:'floppy', legLen:0.5, legR:0.095, tail:'long' },
-    failText:'…(고개를 갸웃해요)', desc:'순함·집중 — 보상에 잘 반응해요' },
+    size:{ body:[1.0,0.75,1.25], head:0.52, earType:'floppy', legLen:0.5, legR:0.095, tail:'long' } },
 };
-let breedKey = 'retriever';
-let trainLv = {};
-let stats = { cmd:0, ok:0 };
+let breedKey = 'retriever', trainLv = {}, stats = { cmd:0, ok:0 };
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || matchMedia('(pointer:coarse)').matches;
 
 /* ─────────── 유틸 ─────────── */
 const $ = id => document.getElementById(id);
-function log(msg, cls='') {
-  const d = document.createElement('div'); if (cls) d.className = cls;
-  d.textContent = new Date().toLocaleTimeString('ko-KR',{hour12:false}) + '  ' + msg;
-  const body = $('logBody'); body.prepend(d);
-  while (body.childNodes.length > 40) body.removeChild(body.lastChild);
+function dot(id, on) { const d = $(id); d.classList.toggle('on', !!on); d.classList.toggle('off', on === false); }
+function toast(t, ms=1400) {
+  const e = $('toast'); e.textContent = t; e.style.opacity = 1;
+  clearTimeout(toast._t); toast._t = setTimeout(()=>e.style.opacity = 0, ms);
 }
-function chip(id, on) { const c = $(id); c.classList.toggle('on', on); c.classList.toggle('off', !on); }
-function guide(t) { $('guide').textContent = t; }
-function bubble(t, ms=1800) {
-  const b = $('bubble'); b.textContent = t; b.style.display = 'block';
-  const p = dogScreenPos(); b.style.left = (p.x+40)+'px'; b.style.top = (p.y-120)+'px';
-  clearTimeout(bubble._t); bubble._t = setTimeout(()=>b.style.display='none', ms);
+function mood(emoji, ms=1800) {   // 강아지 머리 위 상태 버블
+  const e = $('mood'); e.textContent = emoji; e.style.opacity = 1;
+  e.style.transform = 'translate(-50%,-100%) scale(1)';
+  clearTimeout(mood._t); mood._t = setTimeout(()=>{ e.style.opacity = 0; }, ms);
+}
+function wordPop(text) {          // 인식 단어 팝 → 강아지에게 날아가 흡수
+  const el = $('wordPop');
+  el.textContent = text;
+  el.style.transition = 'none'; el.style.opacity = 1;
+  el.style.left = '50%'; el.style.top = '40%';
+  el.style.transform = 'translate(-50%,-50%) scale(.3)';
+  requestAnimationFrame(() => {
+    el.style.transition = 'transform .18s ease-out';
+    el.style.transform = 'translate(-50%,-50%) scale(1)';
+  });
+  clearTimeout(wordPop._t);
+  wordPop._t = setTimeout(() => {
+    const p = dogScreenPos();
+    el.style.transition = 'all .5s ease-in';
+    el.style.left = p.x + 'px'; el.style.top = p.y + 'px';
+    el.style.transform = 'translate(-50%,-50%) scale(.12)'; el.style.opacity = 0;
+  }, 620);
 }
 
 /* ─────────── Three.js 무대 ─────────── */
 const renderer = new THREE.WebGLRenderer({ canvas:$('stage'), alpha:true, antialias:true });
-renderer.setSize(innerWidth, innerHeight); renderer.setPixelRatio(devicePixelRatio);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 const scene = new THREE.Scene();
-const camera3 = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 100);
+const camera3 = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
 camera3.position.set(0, 0.4, 5);
 scene.add(new THREE.AmbientLight(0xffffff, 1.1));
 const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(2,4,5); scene.add(sun);
-const handCv = $('hands'), hctx = handCv.getContext('2d');
+const fxCv = $('fx'), fctx = fxCv.getContext('2d');
+const waveCv = $('waveStrip'), wctx = waveCv.getContext('2d');
 function sizeAll() {
   renderer.setSize(innerWidth, innerHeight);
   camera3.aspect = innerWidth/innerHeight; camera3.updateProjectionMatrix();
-  handCv.width = innerWidth; handCv.height = innerHeight;
+  fxCv.width = innerWidth; fxCv.height = innerHeight;
+  waveCv.width = innerWidth; waveCv.height = 34;
 }
 addEventListener('resize', sizeAll); sizeAll();
 
-/* ─────────── 만화풍 강아지 (프로시저럴 모델) ─────────── */
-let dog = null, parts = null;
-function toon(color) { return new THREE.MeshToonMaterial({ color }); }
-function buildDog(key) {
+/* ─────────── 만화풍 강아지 ─────────── */
+let dog = null, parts = null, spawnT = 1;
+function toon(c) { return new THREE.MeshToonMaterial({ color:c }); }
+function buildDog(key, poof=false) {
   if (dog) scene.remove(dog);
   const B = BREEDS[key], S = B.size, C = B.colors;
   dog = new THREE.Group(); parts = {};
   const body = new THREE.Group();
   const torso = new THREE.Mesh(new THREE.SphereGeometry(0.5, 24, 18), toon(C.body));
-  torso.scale.set(S.body[0], S.body[1], S.body[2]); body.add(torso);
+  torso.scale.set(...S.body); body.add(torso);
   const belly = new THREE.Mesh(new THREE.SphereGeometry(0.42, 20, 14), toon(C.belly));
   belly.scale.set(S.body[0]*0.82, S.body[1]*0.8, S.body[2]*0.9); belly.position.y = -0.12; body.add(belly);
   body.position.y = S.legLen + S.body[1]*0.35;
   dog.add(body); parts.body = body;
 
   const head = new THREE.Group();
-  const skull = new THREE.Mesh(new THREE.SphereGeometry(S.head, 24, 18), toon(C.body)); head.add(skull);
+  head.add(new THREE.Mesh(new THREE.SphereGeometry(S.head, 24, 18), toon(C.body)));
   const muzzle = new THREE.Mesh(new THREE.SphereGeometry(S.head*0.52, 18, 14), toon(C.muzzle));
   muzzle.scale.set(1, 0.72, 0.9); muzzle.position.set(0, -S.head*0.28, S.head*0.72); head.add(muzzle);
   const nose = new THREE.Mesh(new THREE.SphereGeometry(S.head*0.14, 12, 10), toon(0x2b2b2b));
@@ -208,18 +217,15 @@ function buildDog(key) {
   head.position.set(0, S.body[1]*0.55 + S.head*0.5, S.body[2]*0.42);
   body.add(head); parts.head = head;
 
-  const legPos = [
+  for (const [nm, x, z] of [
     ['legFL', -S.body[0]*0.32,  S.body[2]*0.34], ['legFR', S.body[0]*0.32,  S.body[2]*0.34],
-    ['legBL', -S.body[0]*0.34, -S.body[2]*0.36], ['legBR', S.body[0]*0.34, -S.body[2]*0.36],
-  ];
-  for (const [nm, x, z] of legPos) {
+    ['legBL', -S.body[0]*0.34, -S.body[2]*0.36], ['legBR', S.body[0]*0.34, -S.body[2]*0.36]]) {
     const g = new THREE.Group();
     const leg = new THREE.Mesh(new THREE.CapsuleGeometry(S.legR, S.legLen, 6, 12), toon(C.body));
     leg.position.y = -(S.legLen/2 + S.legR);
     const paw = new THREE.Mesh(new THREE.SphereGeometry(S.legR*1.35, 10, 8), toon(C.muzzle));
     paw.position.set(0, -(S.legLen + S.legR*1.2), S.legR*0.5);
-    g.add(leg, paw);
-    g.position.set(x, -S.body[1]*0.28, z);
+    g.add(leg, paw); g.position.set(x, -S.body[1]*0.28, z);
     body.add(g); parts[nm] = g;
   }
 
@@ -229,23 +235,31 @@ function buildDog(key) {
   else if (S.tail === 'thin') tg = new THREE.Mesh(new THREE.CapsuleGeometry(0.035, 0.4, 6, 10), toon(C.ear));
   else tg = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), toon(C.ear));
   tg.position.y = (S.tail==='stub') ? 0.05 : 0.28;
-  tail.add(tg);
-  tail.position.set(0, S.body[1]*0.3, -S.body[2]*0.5);
-  tail.rotation.x = -0.7;
+  tail.add(tg); tail.position.set(0, S.body[1]*0.3, -S.body[2]*0.5); tail.rotation.x = -0.7;
   body.add(tail); parts.tail = tail;
 
+  // 바닥 앵커 매트 (AR 존재감): 그림자 + 은은한 링
   const sh = new THREE.Mesh(new THREE.CircleGeometry(0.9, 24),
     new THREE.MeshBasicMaterial({ color:0x000000, transparent:true, opacity:0.25 }));
   sh.rotation.x = -Math.PI/2; sh.position.y = 0.01; sh.scale.set(S.body[0]+0.3, S.body[2]+0.2, 1);
   dog.add(sh);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.98, 1.08, 40),
+    new THREE.MeshBasicMaterial({ color:0xff9f43, transparent:true, opacity:0.4, side:THREE.DoubleSide }));
+  ring.rotation.x = -Math.PI/2; ring.position.y = 0.02;
+  dog.add(ring); parts.anchor = ring;
 
   scene.add(dog);
   applyPlacement();
   if (!(key in trainLv)) trainLv[key] = 0;
   poseNow('stand');
+  if (poof) {   // 등장: 펑 연기 + 바운스 스케일인
+    spawnT = 0;
+    const p = dogScreenPos();
+    emit('puff', p.x, p.y, 16);
+  }
 }
 
-/* ─────────── 자세(포즈) 엔진 ─────────── */
+/* ─────────── 포즈 엔진 ─────────── */
 const POSES = {
   stand: { body:{rx:0, py:0}, legFL:{rx:0}, legFR:{rx:0}, legBL:{rx:0}, legBR:{rx:0}, head:{rx:0} },
   sit:   { body:{rx:-0.55, py:-0.12}, legBL:{rx:1.25}, legBR:{rx:1.25}, legFL:{rx:0.55}, legFR:{rx:0.55}, head:{rx:0.18} },
@@ -253,32 +267,32 @@ const POSES = {
   paw:   { body:{rx:-0.62, py:-0.1}, legBL:{rx:1.25}, legBR:{rx:1.25}, legFL:{rx:0.55}, legFR:{rx:-1.35}, head:{rx:0.1} },
   stay:  { body:{rx:0, py:0}, legFL:{rx:0}, legFR:{rx:0}, legBL:{rx:0}, legBR:{rx:0}, head:{rx:-0.12} },
 };
-let curPose = 'stand', poseT = 1, poseFrom = {}, poseTo = POSES.stand;
-function capturePose() {
-  const snap = {};
-  for (const nm of ['body','legFL','legFR','legBL','legBR','head'])
-    snap[nm] = { rx:parts[nm].rotation.x, py:(nm==='body'?parts.body.position.y - baseBodyY():0) };
-  return snap;
-}
+let poseT = 1, poseFrom = {}, poseTo = POSES.stand;
 function baseBodyY() { const S = BREEDS[breedKey].size; return S.legLen + S.body[1]*0.35; }
-function poseNow(name) { curPose = name; poseFrom = capturePose(); poseTo = POSES[name]; poseT = 0; }
+function capturePose() {
+  const s = {};
+  for (const nm of ['body','legFL','legFR','legBL','legBR','head'])
+    s[nm] = { rx:parts[nm].rotation.x, py:(nm==='body'?parts.body.position.y - baseBodyY():0) };
+  return s;
+}
+function poseNow(n) { poseFrom = capturePose(); poseTo = POSES[n]; poseT = 0; }
 function tickPose(dt) {
   if (poseT < 1) poseT = Math.min(1, poseT + dt*2.2);
   const e = poseT<0.5 ? 2*poseT*poseT : 1-Math.pow(-2*poseT+2,2)/2;
   for (const nm of ['body','legFL','legFR','legBL','legBR','head']) {
-    const from = poseFrom[nm] || {rx:0,py:0}, to = poseTo[nm] || {rx:0,py:0};
-    parts[nm].rotation.x = from.rx + ((to.rx||0) - from.rx)*e;
-    if (nm === 'body') parts.body.position.y = baseBodyY() + (from.py + ((to.py||0)-from.py)*e);
+    const f = poseFrom[nm] || {rx:0,py:0}, t = poseTo[nm] || {rx:0,py:0};
+    parts[nm].rotation.x = f.rx + ((t.rx||0) - f.rx)*e;
+    if (nm === 'body') parts.body.position.y = baseBodyY() + (f.py + ((t.py||0)-f.py)*e);
   }
 }
 
-/* ─────────── 시선(아이컨택)·생동감 ─────────── */
+/* ─────────── 생동감(시선·꼬리·귀·깜빡임) ─────────── */
 let facePos = null, faceSeen = 0, gazeCur = new THREE.Vector3(0,1,6), gazeTgt = new THREE.Vector3(0,1,6);
 let wagPower = 0, earPerk = 0, blinkT = 0, nextBlink = 2, hopT = -1, sulkYaw = 0;
 function tickLife(dt, t) {
-  if (facePos && t - faceSeen < 1.5) {
-    gazeTgt.set((0.5 - facePos.x)*7, (0.55 - facePos.y)*4 + 1, 5);
-  } else if (Math.floor(t/2.5) % 3 === 0) gazeTgt.set(Math.sin(t*0.7)*3, 0.8, 5);
+  if (facePos && t - faceSeen < 1.5) gazeTgt.set((0.5 - facePos.x)*7, (0.55 - facePos.y)*4 + 1, 5);
+  else if (Math.floor(t/2.5) % 3 === 0) gazeTgt.set(Math.sin(t*0.7)*3, 0.8, 5);
+  else gazeTgt.set(0, 1.2, 6);                       // 후면 카메라: 카메라(=사용자)를 바라봄
   gazeCur.lerp(gazeTgt, Math.min(1, dt*3.5));
   const hp = new THREE.Vector3(); parts.head.getWorldPosition(hp);
   const dir = gazeCur.clone().sub(hp);
@@ -295,18 +309,23 @@ function tickLife(dt, t) {
   }
   blinkT -= dt;
   if (blinkT < -nextBlink) { blinkT = 0.13; nextBlink = 1.5 + Math.random()*3.5; }
-  const closed = blinkT > 0;
-  for (const nm of ['eyeL','eyeR']) parts[nm].scale.y = closed ? 0.12 : 1;
+  for (const nm of ['eyeL','eyeR']) parts[nm].scale.y = blinkT > 0 ? 0.12 : 1;
   if (hopT >= 0) {
     hopT += dt*3;
     dog.position.y = placement.y + Math.abs(Math.sin(hopT*Math.PI))*0.35*(hopT<2?1:0);
     if (hopT > 2) { hopT = -1; dog.position.y = placement.y; }
   }
+  parts.anchor.material.opacity = 0.3 + Math.sin(t*2)*0.12;   // 앵커 링 맥동
+  if (spawnT < 1) {                                            // 등장 바운스
+    spawnT = Math.min(1, spawnT + dt*2.2);
+    const k = spawnT, over = 1 + 0.3*Math.sin(k*Math.PI);
+    dog.scale.setScalar(placement.s * k * over);
+  }
 }
 
-/* ─────────── 성격 반응 엔진 (상태 머신) ─────────── */
+/* ─────────── 성격 반응 엔진 ─────────── */
 let state = 'idle', busyUntil = 0, awaitingPraise = false, praiseDeadline = 0, failStreak = 0;
-function setState(s, label) { state = s; $('sState').textContent = label; }
+let groundPulse = null, firstSuccess = true;
 function pObey() {
   const B = BREEDS[breedKey];
   return Math.min(0.97, B.obey + B.gain*trainLv[breedKey] - (failStreak>1 ? 0.08 : 0));
@@ -316,74 +335,66 @@ function command(cmd, src) {
   if (t < busyUntil) return;
   const B = BREEDS[breedKey];
   if (cmd === 'praise') { doPraise(src); return; }
-  stats.cmd++; updStats();
-  log(`명령 [${cmdName(cmd)}] 인식 (${src})`, 'y');
-  if (src.startsWith('손짓')) fireRing();          // 제스처 인식 이펙트
-  if (src.startsWith('음성')) waveFlash = 1;       // 파동 패널 플래시
-  setState('attend', '집중 (아이컨택)');
-  earPerk = 1; sulkYaw = 0;
-  gazeTgt.set(facePos ? (0.5-facePos.x)*7 : 0, 1.2, 5);
+  stats.cmd++;
+  if (src === 'hand') fireBurst();
+  if (src === 'voice') { waveFlash = 1; wordPop(cmdName(cmd) + '!'); }
+  state = 'attend'; earPerk = 1; sulkYaw = 0;
+  mood('❗', B.attentionMs + 400);
+  sparkleEyes();                                    // 아이컨택 반짝
+  gazeTgt.set(facePos ? (0.5-facePos.x)*7 : 0, 1.2, 5.5);
   busyUntil = t + B.attentionMs + 600;
   setTimeout(() => {
-    const roll = Math.random();
-    if (roll < pObey()) {
+    if (Math.random() < pObey()) {
       failStreak = 0;
-      const poseMap = { sit:'sit', down:'down', paw:'paw', stay:'stay', come:'stand' };
-      poseNow(poseMap[cmd] || 'stand');
-      if (cmd === 'come') bubble('총총총…');
+      poseNow({ sit:'sit', down:'down', paw:'paw', stay:'stay', come:'stand' }[cmd] || 'stand');
       stats.ok++; trainLv[breedKey]++;
-      wagPower = 0.7;
+      wagPower = 0.7; state = 'performed';
+      const p = dogScreenPos();
+      emit('star', p.x, p.y, 12); groundPulse = { t0: performance.now() };
+      if (cmd === 'stay') mood('👌', 1500); else mood('✨', 1500);
       awaitingPraise = true; praiseDeadline = performance.now() + 5000;
-      setState('performed', `수행: ${cmdName(cmd)} — 칭찬 타이밍!`);
-      guide('지금이에요! "옳지, 잘했어!" 라고 칭찬해 주세요');
-      log(`${B.name} → ${cmdName(cmd)} 수행 성공`, 'g');
+      if (firstSuccess) { firstSuccess = false; setTimeout(()=>wordPop('옳지! 해보세요'), 900); }
+      if (trainLv[breedKey] % 5 === 0) levelUp();
     } else {
       failStreak++;
       if (Math.random() < B.sulky) {
-        sulkYaw = (Math.random()<0.5?-1:1) * 0.9;
-        setState('sulk', '삐짐/딴청');
-      } else setState('idle', '갸웃…');
-      bubble(B.failText, 2200);
-      log(`${B.name} 이(가) 명령을 무시함 (견종 기질)`, 'r');
-      guide(`한 번 더! 다시 "${cmdName(cmd)}" 해보세요 (기질상 반복이 필요해요)`);
-      setTimeout(() => { if (state==='sulk') { sulkYaw=0; setState('idle','대기 중'); } }, 2600);
+        sulkYaw = (Math.random()<0.5?-1:1) * 0.9; state = 'sulk';
+        mood(breedKey==='frenchie' ? '😤' : '💢', 2400);
+        if (breedKey === 'frenchie') { const p = dogScreenPos(); emit('puff', p.x, p.y - 20, 4); }
+      } else { state = 'idle'; mood('❓', 2000); }
+      setTimeout(() => { if (state==='sulk') { sulkYaw = 0; state = 'idle'; } }, 2600);
     }
-    updStats();
   }, B.attentionMs);
 }
 function doPraise(src) {
-  const B = BREEDS[breedKey];
-  if (src.startsWith('손짓')) fireRing();
-  if (src.startsWith('음성')) waveFlash = 1;
+  if (src === 'hand') fireBurst();
+  if (src === 'voice') { waveFlash = 1; wordPop('옳지!'); }
+  const p = dogScreenPos();
   if (awaitingPraise && performance.now() < praiseDeadline) {
     awaitingPraise = false; trainLv[breedKey] += 2;
     wagPower = 1; hopT = 0; earPerk = 1;
-    bubble('멍! (신남)'); guide('완벽한 칭찬 타이밍! 훈련 레벨이 올랐어요');
-    log(`칭찬 적중 (${src}) — 훈련 레벨 +2`, 'g');
+    mood('🧡', 2200); emit('heart', p.x, p.y, 14);
+    if (trainLv[breedKey] % 5 <= 1) levelUp();
     setTimeout(()=>poseNow('stand'), 1800);
   } else {
-    wagPower = 0.6;
-    log(`칭찬 (${src}) — 타이밍이 늦으면 효과가 절반이에요`, 'y');
-    guide('칭찬은 행동 직후 5초 안에! (훈련 핵심 원리)');
+    wagPower = 0.6; mood('🙂', 1500); emit('heart', p.x, p.y, 4);
   }
-  setState('idle', '대기 중'); updStats();
+  state = 'idle';
+}
+function levelUp() {
+  const b = dogBase();
+  ringBurst(b.x, b.y, b.r);
+  const p = dogScreenPos();
+  emit('bone', p.x, p.y - 30, 5); emit('star', p.x, p.y, 16);
 }
 function cmdName(c) { return {sit:'앉아', down:'엎드려', paw:'손', stay:'기다려', come:'이리와', praise:'칭찬'}[c] || c; }
-function updStats() {
-  $('sBreed').textContent = BREEDS[breedKey].name;
-  $('sCmd').textContent = stats.cmd; $('sOk').textContent = stats.ok;
-  $('sRate').textContent = stats.cmd ? Math.round(stats.ok/stats.cmd*100)+'%' : '-';
-  const lv = trainLv[breedKey]||0;
-  $('sLv').textContent = 1 + Math.floor(lv/5);
-  $('sLvBar').textContent = '●'.repeat(lv%5) + '○'.repeat(5-(lv%5));
-}
 
-/* ─────────── 배치(캘리브레이션) ─────────── */
+/* ─────────── 배치 ─────────── */
 const placement = JSON.parse(localStorage.getItem('mung-place') || '{"x":0,"y":-0.9,"s":1}');
 function applyPlacement() {
   if (!dog) return;
   dog.position.set(placement.x, placement.y, 0);
-  dog.scale.setScalar(placement.s);
+  if (spawnT >= 1) dog.scale.setScalar(placement.s);
   dog.rotation.y = -0.25;
 }
 for (const [id,k] of [['rX','x'],['rY','y'],['rS','s']]) {
@@ -392,76 +403,84 @@ for (const [id,k] of [['rX','x'],['rY','y'],['rS','s']]) {
     localStorage.setItem('mung-place', JSON.stringify(placement)); });
 }
 function dogScreenPos() {
-  if (!dog) return {x:innerWidth/2, y:innerHeight/2};
+  if (!dog) return { x:innerWidth/2, y:innerHeight/2 };
   const v = new THREE.Vector3(); parts.head.getWorldPosition(v); v.project(camera3);
   return { x:(v.x*0.5+0.5)*innerWidth, y:(-v.y*0.5+0.5)*innerHeight };
 }
+function dogBase() {   // 발밑 중심 + 픽셀 반경 (링 게이지용)
+  const v = new THREE.Vector3(dog.position.x, dog.position.y, 0); v.project(camera3);
+  const x = (v.x*0.5+0.5)*innerWidth, y = (-v.y*0.5+0.5)*innerHeight;
+  const v2 = new THREE.Vector3(dog.position.x + placement.s*1.1, dog.position.y, 0); v2.project(camera3);
+  const r = Math.abs((v2.x*0.5+0.5)*innerWidth - x);
+  return { x, y, r };
+}
 
-/* ─────────── 카메라 ─────────── */
+/* ─────────── 카메라 (모바일=후면 기본, 전환 가능) ─────────── */
 const video = $('cam');
-let videoReady = false;
-navigator.mediaDevices.getUserMedia({ video:{ width:1280, height:720 }, audio:false })
-  .then(s => { video.srcObject = s; video.onloadeddata = () => { videoReady = true; chip('cCam', true); log('카메라 연결됨','g'); }; })
-  .catch(e => { chip('cCam', false); log('카메라 실패: '+e.message+' — 폴백 버튼으로 시연 가능','r'); });
-
-/* 카메라 좌표(정규화) → 화면 픽셀 (object-fit:cover + 좌우반전 보정) */
+let videoReady = false, facing = isMobile ? 'environment' : 'user', mirrored = !isMobile, stream = null;
+async function startCamera() {
+  if (stream) stream.getTracks().forEach(tr => tr.stop());
+  videoReady = false;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: facing === 'environment' ? { ideal:'environment' } : 'user',
+               width:{ ideal:1280 }, height:{ ideal:720 } }, audio: false });
+    video.srcObject = stream;
+    mirrored = facing === 'user';
+    video.classList.toggle('mirror', mirrored);
+    video.onloadeddata = () => { videoReady = true; dot('dCam', true); };
+  } catch(e) { dot('dCam', false); toast('카메라 실패 — ⋯ 버튼으로 시연 가능'); }
+}
+$('flip').addEventListener('click', () => {
+  facing = facing === 'environment' ? 'user' : 'environment';
+  toast(facing === 'environment' ? '후면 카메라' : '전면 카메라');
+  startCamera();
+});
+startCamera();
 function videoToScreen(nx, ny) {
   const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
   const W = innerWidth, H = innerHeight;
   const sc = Math.max(W/vw, H/vh);
   const dw = vw*sc, dh = vh*sc, ox = (W-dw)/2, oy = (H-dh)/2;
-  return { x: W - (ox + nx*dw), y: oy + ny*dh };
+  const px = ox + nx*dw;
+  return { x: mirrored ? W - px : px, y: oy + ny*dh };
 }
 
-/* ─────────── 음성 파동 시각화 (Web Audio) ─────────── */
-let analyser = null, waveData = null, waveFlash = 0;
-const waveCv = $('wave'), wctx = waveCv.getContext('2d');
-navigator.mediaDevices.getUserMedia({ audio:true })
-  .then(s => {
-    const ac = new (window.AudioContext || window.webkitAudioContext)();
-    const srcNode = ac.createMediaStreamSource(s);
-    analyser = ac.createAnalyser(); analyser.fftSize = 512;
-    srcNode.connect(analyser);
-    waveData = new Uint8Array(analyser.fftSize);
-    $('vTxt').textContent = '듣고 있어요 — 말해보세요';
-    document.body.addEventListener('click', () => ac.resume(), { once:true });
-  })
-  .catch(() => { $('vTxt').textContent = '마이크 접근 실패 — 파동 표시 불가'; });
-
+/* ─────────── 음성: 파동 스트립 + 테두리 글로우 ─────────── */
+let analyser = null, waveData = null, waveFlash = 0, volSmooth = 0;
+navigator.mediaDevices.getUserMedia({ audio:true }).then(s => {
+  const ac = new (window.AudioContext || window.webkitAudioContext)();
+  ac.createMediaStreamSource(s).connect(analyser = ac.createAnalyser());
+  analyser.fftSize = 512; waveData = new Uint8Array(analyser.fftSize);
+  document.body.addEventListener('pointerdown', () => ac.resume(), { once:true });
+}).catch(()=>{});
 function drawWave(dt) {
   const W = waveCv.width, H = waveCv.height;
   wctx.clearRect(0, 0, W, H);
   waveFlash = Math.max(0, waveFlash - dt*1.6);
-  $('voicePanel').classList.toggle('hot', waveFlash > 0.05);
-  if (!analyser) {   // 대기: 평평한 선
-    wctx.strokeStyle = '#555'; wctx.beginPath();
-    wctx.moveTo(0, H/2); wctx.lineTo(W, H/2); wctx.stroke(); return;
-  }
+  if (!analyser) return;
   analyser.getByteTimeDomainData(waveData);
-  // 볼륨(RMS) — 소리가 나면 강아지 귀도 쫑긋
   let sum = 0;
   for (let i = 0; i < waveData.length; i++) { const d = (waveData[i]-128)/128; sum += d*d; }
-  const vol = Math.sqrt(sum / waveData.length);          // 0~1
+  const vol = Math.sqrt(sum / waveData.length);
+  volSmooth += (vol - volSmooth) * 0.25;
   if (vol > 0.06) earPerk = Math.max(earPerk, Math.min(1, vol*6));
+  $('edgeGlow').style.opacity = Math.min(0.85, volSmooth*5 + waveFlash*0.5);  // 테두리 글로우
   const active = vol > 0.035;
-  // 파형
-  const col = waveFlash > 0.05 ? '#ffce7a' : (active ? '#ff9f43' : '#6a7080');
+  const col = waveFlash > 0.05 ? '#ffce7a' : (active ? '#ff9f43' : 'rgba(160,168,190,.55)');
   wctx.lineWidth = 2; wctx.strokeStyle = col;
-  wctx.shadowBlur = active ? 10 : 0; wctx.shadowColor = col;
+  wctx.shadowBlur = active ? 8 : 0; wctx.shadowColor = col;
   wctx.beginPath();
   const step = waveData.length / W;
   for (let x = 0; x < W; x++) {
-    const v = waveData[Math.floor(x*step)] / 128 - 1;    // -1~1
-    const y = H/2 + v * H * 0.42 * (waveFlash > 0.05 ? 1.25 : 1);
+    const v = waveData[Math.floor(x*step)] / 128 - 1;
+    const y = H/2 + v * H * 0.46 * (waveFlash > 0.05 ? 1.3 : 1);
     x === 0 ? wctx.moveTo(x, y) : wctx.lineTo(x, y);
   }
   wctx.stroke(); wctx.shadowBlur = 0;
-  // 볼륨 게이지 (하단 바)
-  wctx.fillStyle = col;
-  wctx.fillRect(0, H-3, Math.min(1, vol*4) * W, 3);
 }
 
-/* ─────────── 음성 인식 (Web Speech API, ko-KR) ─────────── */
+/* ─────────── 음성 인식 ─────────── */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const VOICE_MAP = [
   [/앉아|안자|앉으/, 'sit'], [/엎드려|업드려|엎드리/, 'down'],
@@ -476,35 +495,23 @@ if (SR) {
     earPerk = Math.max(earPerk, 0.6);
     const r = ev.results[ev.results.length-1];
     const txt = r[0].transcript.trim();
-    // 실시간 받아쓰기 표시
-    const vt = $('vTxt');
-    vt.textContent = '들림: ' + (txt.length > 22 ? '…' + txt.slice(-22) : txt);
-    vt.classList.remove('hit');
     if (!r.isFinal && txt.length < 2) return;
     const now = performance.now();
     for (const [re, cmd] of VOICE_MAP)
-      if (re.test(txt) && now - lastFire > 1500) {
-        lastFire = now;
-        vt.textContent = '명령 인식: "' + cmdName(cmd) + '"';
-        vt.classList.add('hit');
-        command(cmd, '음성:"'+txt+'"'); break;
-      }
+      if (re.test(txt) && now - lastFire > 1500) { lastFire = now; command(cmd, 'voice'); break; }
   };
   rec.onend = () => { try { rec.start(); } catch(e){} };
-  rec.onerror = e => { if (e.error==='not-allowed') { chip('cMic',false); log('마이크 권한 거부됨','r'); } };
-  try { rec.start(); chip('cMic', true); log('음성 인식 시작 (크롬·인터넷 필요)','g'); }
-  catch(e) { chip('cMic', false); }
-} else { chip('cMic', false); log('이 브라우저는 음성 인식 미지원 — 크롬 사용 권장','r'); }
+  rec.onerror = e => { if (e.error === 'not-allowed') dot('dMic', false); };
+  try { rec.start(); dot('dMic', true); } catch(e) { dot('dMic', false); }
+} else dot('dMic', false);
 
-/* ─────────── 손짓·얼굴 인식 (MediaPipe) ─────────── */
+/* ─────────── 손짓·얼굴 인식 ─────────── */
 const GESTURE_MAP = { Open_Palm:'stay', Pointing_Up:'sit', Closed_Fist:'down', Victory:'paw', Thumb_Up:'praise' };
-const GESTURE_KO  = { Open_Palm:'✋ 기다려', Pointing_Up:'☝️ 앉아', Closed_Fist:'✊ 엎드려',
-                      Victory:'✌️ 손', Thumb_Up:'👍 칭찬', Thumb_Down:'👎', ILoveYou:'🤟', None:'인식 중…' };
+const GESTURE_KO  = { Open_Palm:'✋', Pointing_Up:'☝️', Closed_Fist:'✊', Victory:'✌️', Thumb_Up:'👍' };
 const HAND_LINKS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],
                     [9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
-let gestureRec = null, faceDet = null, lastGesture = '', lastGestureAt = 0;
-let handSnap = null;       // { pts:[{x,y}...], label, score, ts }
-let ringFx = null;         // { x, y, t0 }
+let gestureRec = null, faceDet = null;
+let handSnap = null, holdName = null, holdStart = 0, lastFired = '', lastFiredAt = 0, ringFx = null;
 (async () => {
   try {
     const fs = await FilesetResolver.forVisionTasks(
@@ -513,42 +520,50 @@ let ringFx = null;         // { x, y, t0 }
       baseOptions: { modelAssetPath:
         'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task' },
       runningMode: 'VIDEO', numHands: 1 });
-    chip('cHand', true); log('손짓 인식 준비 완료','g');
+    dot('dHand', true);
     faceDet = await FaceDetector.createFromOptions(fs, {
       baseOptions: { modelAssetPath:
         'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite' },
       runningMode: 'VIDEO' });
-    chip('cFace', true); log('얼굴 추적(아이컨택) 준비 완료','g');
-  } catch(e) { log('MediaPipe 로드 실패(인터넷 확인): '+e.message,'r'); }
+    dot('dFace', true);
+  } catch(e) { toast('손짓 인식 로드 실패 — 인터넷 확인'); }
 })();
-function fireRing() {
-  if (handSnap) { const w = handSnap.pts[0]; ringFx = { x:w.x, y:w.y, t0:performance.now() }; }
+function handCenter() {
+  if (!handSnap) return null;
+  let sx = 0, sy = 0;
+  for (const p of handSnap.pts) { sx += p.x; sy += p.y; }
+  return { x: sx/handSnap.pts.length, y: sy/handSnap.pts.length };
+}
+function fireBurst() {
+  const c = handCenter();
+  if (c) { ringFx = { x:c.x, y:c.y, t0:performance.now() }; emit('spark', c.x, c.y, 10); }
 }
 let frameNo = 0;
+const gEvery = isMobile ? 3 : 2, fEvery = isMobile ? 5 : 3;
 function tickVision(t) {
   if (!videoReady) return;
   frameNo++;
-  if (gestureRec && frameNo % 2 === 0) {
+  if (gestureRec && frameNo % gEvery === 0) {
     const res = gestureRec.recognizeForVideo(video, t);
     const lm = res.landmarks?.[0];
     const g = res.gestures?.[0]?.[0];
-    if (lm) {
-      handSnap = {
-        pts: lm.map(p => videoToScreen(p.x, p.y)),
-        label: GESTURE_KO[g?.categoryName] || '인식 중…',
-        known: !!(g && GESTURE_MAP[g.categoryName] && g.score > 0.6),
-        score: g ? g.score : 0, ts: performance.now(),
-      };
-    }
-    if (g && g.score > 0.6 && GESTURE_MAP[g.categoryName]) {
-      const now = performance.now();
-      if (g.categoryName !== lastGesture || now - lastGestureAt > 2500) {
-        lastGesture = g.categoryName; lastGestureAt = now;
-        command(GESTURE_MAP[g.categoryName], '손짓:'+g.categoryName);
+    const known = !!(g && GESTURE_MAP[g.categoryName] && g.score > 0.6);
+    if (lm) handSnap = { pts: lm.map(p => videoToScreen(p.x, p.y)),
+                         icon: known ? GESTURE_KO[g.categoryName] : '',
+                         known, score: g ? g.score : 0, ts: performance.now() };
+    const now = performance.now();
+    if (known) {                                   // 0.5초 유지 → 판정 링이 차오른 뒤 발동
+      if (g.categoryName !== holdName) { holdName = g.categoryName; holdStart = now; }
+      const held = now - holdStart;
+      if (handSnap) handSnap.hold = Math.min(1, held/500);
+      if (held >= 500 && (g.categoryName !== lastFired || now - lastFiredAt > 2500)) {
+        lastFired = g.categoryName; lastFiredAt = now; holdStart = now;
+        wordPop(cmdName(GESTURE_MAP[g.categoryName]) + '!');
+        command(GESTURE_MAP[g.categoryName], 'hand');
       }
-    } else if (!g) lastGesture = '';
+    } else { holdName = null; if (!g) lastFired = ''; }
   }
-  if (faceDet && frameNo % 3 === 0) {
+  if (faceDet && mirrored && frameNo % fEvery === 0) {   // 얼굴 추적은 전면 카메라에서만
     const res = faceDet.detectForVideo(video, t+0.1);
     const d = res.detections?.[0];
     if (d) {
@@ -559,84 +574,176 @@ function tickVision(t) {
   }
 }
 
-/* ─────────── 손 스켈레톤 오버레이 (실시간 제스처 시각화) ─────────── */
-function drawHands() {
-  hctx.clearRect(0, 0, handCv.width, handCv.height);
-  const now = performance.now();
-  // 명령 발동 링 이펙트
-  if (ringFx) {
-    const k = (now - ringFx.t0) / 600;
-    if (k < 1) {
-      hctx.beginPath();
-      hctx.arc(ringFx.x, ringFx.y, 30 + k*90, 0, Math.PI*2);
-      hctx.strokeStyle = `rgba(255,159,67,${1-k})`; hctx.lineWidth = 5*(1-k)+1;
-      hctx.stroke();
-    } else ringFx = null;
-  }
-  if (!handSnap || now - handSnap.ts > 350) return;   // 손이 사라지면 지움
-  const { pts, label, known, score } = handSnap;
-  const col = known ? '#ff9f43' : 'rgba(120,200,255,0.9)';
-  // 뼈대
-  hctx.lineWidth = 3; hctx.strokeStyle = col;
-  hctx.shadowBlur = 8; hctx.shadowColor = col;
-  hctx.beginPath();
-  for (const [a, b] of HAND_LINKS) { hctx.moveTo(pts[a].x, pts[a].y); hctx.lineTo(pts[b].x, pts[b].y); }
-  hctx.stroke(); hctx.shadowBlur = 0;
-  // 관절 점 21개
-  for (let i = 0; i < pts.length; i++) {
-    hctx.beginPath();
-    hctx.arc(pts[i].x, pts[i].y, i % 4 === 0 ? 5 : 3.2, 0, Math.PI*2);
-    hctx.fillStyle = i === 0 ? '#fff' : col;
-    hctx.fill();
-  }
-  // 라벨 칩 (손목 위)
-  const w = pts[0];
-  const text = label + (known ? `  ${Math.round(score*100)}%` : '');
-  hctx.font = '700 15px "Apple SD Gothic Neo", sans-serif';
-  const tw = hctx.measureText(text).width + 20;
-  const bx = Math.min(Math.max(w.x - tw/2, 8), innerWidth - tw - 8), by = w.y + 26;
-  hctx.fillStyle = known ? 'rgba(255,159,67,.95)' : 'rgba(20,22,30,.85)';
-  hctx.beginPath(); hctx.roundRect(bx, by, tw, 26, 13); hctx.fill();
-  hctx.fillStyle = known ? '#26200f' : '#fff';
-  hctx.fillText(text, bx + 10, by + 18);
-  // 신뢰도 바
-  if (known) {
-    hctx.fillStyle = 'rgba(255,255,255,.5)';
-    hctx.fillRect(bx, by + 29, tw * score, 3);
+/* ─────────── 파티클 시스템 ─────────── */
+const P = [];
+const P_GLYPH = { star:'✦', heart:'🧡', bone:'🦴', spark:'✧' };
+function emit(type, x, y, n) {
+  for (let i = 0; i < n && P.length < 130; i++) {
+    const a = Math.random()*Math.PI*2, sp = 60 + Math.random()*160;
+    P.push({ type, x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp - 80,
+             life:0, total:0.7 + Math.random()*0.6, size:(type==='puff'?10:14) + Math.random()*12 });
   }
 }
+function drawParticles(dt) {
+  for (let i = P.length-1; i >= 0; i--) {
+    const p = P[i];
+    p.life += dt;
+    if (p.life > p.total) { P.splice(i,1); continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 140*dt;
+    const k = 1 - p.life/p.total;
+    fctx.globalAlpha = k;
+    if (p.type === 'puff') {
+      fctx.fillStyle = '#cfd3dc';
+      fctx.beginPath(); fctx.arc(p.x, p.y, p.size*(1.4-k*0.6), 0, Math.PI*2); fctx.fill();
+    } else {
+      fctx.font = `${p.size}px sans-serif`;
+      fctx.fillStyle = p.type === 'star' || p.type === 'spark' ? '#ffce7a' : '#fff';
+      fctx.fillText(P_GLYPH[p.type], p.x, p.y);
+    }
+  }
+  fctx.globalAlpha = 1;
+}
+let ringBursts = [];
+function ringBurst(x, y, r) { ringBursts.push({ x, y, r, t0:performance.now() }); }
 
-/* ─────────── 폴백 버튼·견종 선택 ─────────── */
-document.querySelectorAll('#cmds button').forEach(b =>
-  b.addEventListener('click', () => command(b.dataset.c, '버튼(진행자)')));
+/* ─────────── FX 캔버스 (스켈레톤·링·게이지) ─────────── */
+function sparkleEyes() {
+  const p = dogScreenPos();
+  emit('spark', p.x - 14, p.y - 6, 3); emit('spark', p.x + 14, p.y - 6, 3);
+}
+function drawFx(dt) {
+  fctx.clearRect(0, 0, fxCv.width, fxCv.height);
+  const now = performance.now();
+
+  // 손 스켈레톤 + 판정 링
+  if (handSnap && now - handSnap.ts < 350) {
+    const { pts, known, hold, icon, score } = handSnap;
+    const col = known ? '#ff9f43' : 'rgba(120,200,255,.9)';
+    fctx.lineWidth = 3; fctx.strokeStyle = col;
+    fctx.shadowBlur = 8; fctx.shadowColor = col;
+    fctx.beginPath();
+    for (const [a,b] of HAND_LINKS) { fctx.moveTo(pts[a].x, pts[a].y); fctx.lineTo(pts[b].x, pts[b].y); }
+    fctx.stroke(); fctx.shadowBlur = 0;
+    for (let i = 0; i < pts.length; i++) {
+      fctx.beginPath();
+      fctx.arc(pts[i].x, pts[i].y, i%4===0 ? 4.5 : 3, 0, Math.PI*2);
+      fctx.fillStyle = i===0 ? '#fff' : col; fctx.fill();
+    }
+    const c = handCenter();
+    if (known && c) {                       // 판정 링: 차오르면 발동
+      fctx.beginPath();
+      fctx.arc(c.x, c.y, 44, -Math.PI/2, -Math.PI/2 + Math.PI*2*(hold||0));
+      fctx.strokeStyle = '#ffce7a'; fctx.lineWidth = 5; fctx.stroke();
+      if (icon) { fctx.font = '28px sans-serif'; fctx.fillText(icon, c.x - 14, c.y - 54); }
+    }
+  }
+  // 명령 발동 링
+  if (ringFx) {
+    const k = (now - ringFx.t0)/600;
+    if (k < 1) {
+      fctx.beginPath(); fctx.arc(ringFx.x, ringFx.y, 30 + k*100, 0, Math.PI*2);
+      fctx.strokeStyle = `rgba(255,159,67,${1-k})`; fctx.lineWidth = 5*(1-k)+1; fctx.stroke();
+    } else ringFx = null;
+  }
+  if (dog) {
+    const b = dogBase();
+    // 훈련 게이지 (발밑 링, 5칸 채우면 레벨업)
+    const frac = (trainLv[breedKey] % 5) / 5;
+    if (frac > 0) {
+      fctx.beginPath();
+      fctx.arc(b.x, b.y, b.r*0.85, -Math.PI/2, -Math.PI/2 + Math.PI*2*frac);
+      fctx.strokeStyle = 'rgba(255,159,67,.9)'; fctx.lineWidth = 5; fctx.stroke();
+    }
+    // 칭찬 타이밍 링 (5초간 줄어듦)
+    if (awaitingPraise) {
+      const remain = Math.max(0, (praiseDeadline - now)/5000);
+      fctx.beginPath();
+      fctx.arc(b.x, b.y - b.r*0.9, b.r*1.15, -Math.PI/2, -Math.PI/2 + Math.PI*2*remain);
+      fctx.strokeStyle = 'rgba(255,206,122,.95)'; fctx.lineWidth = 6;
+      fctx.setLineDash([10,7]); fctx.stroke(); fctx.setLineDash([]);
+      fctx.font = '22px sans-serif';
+      fctx.fillText('🧡', b.x - 11, b.y - b.r*0.9 - b.r*1.15 - 8);
+      if (remain <= 0) awaitingPraise = false;
+    }
+    // 성공 바닥 펄스
+    if (groundPulse) {
+      const k = (now - groundPulse.t0)/700;
+      if (k < 1) {
+        fctx.beginPath(); fctx.arc(b.x, b.y, b.r*(0.6 + k*1.2), 0, Math.PI*2);
+        fctx.strokeStyle = `rgba(255,206,122,${1-k})`; fctx.lineWidth = 4*(1-k)+1; fctx.stroke();
+      } else groundPulse = null;
+    }
+  }
+  // 레벨업 링 파열
+  ringBursts = ringBursts.filter(rb => {
+    const k = (now - rb.t0)/800;
+    if (k >= 1) return false;
+    fctx.beginPath(); fctx.arc(rb.x, rb.y, rb.r*(1 + k*1.6), 0, Math.PI*2);
+    fctx.strokeStyle = `rgba(255,159,67,${1-k})`; fctx.lineWidth = 7*(1-k)+1; fctx.stroke();
+    return true;
+  });
+  drawParticles(dt);
+  // 상태 버블 위치 갱신
+  const hp = dogScreenPos();
+  const m = $('mood');
+  m.style.left = hp.x + 'px'; m.style.top = (hp.y - 46) + 'px';
+  m.style.transform = 'translate(-50%,-100%)';
+}
+
+/* ─────────── 터치: 쓰다듬기 / 길게 눌러 통계 ─────────── */
+let pressAt = 0, longTimer = null;
+addEventListener('pointerdown', e => {
+  if (e.target.closest('#top,#breeds,#more,#drawer')) return;
+  pressAt = performance.now();
+  longTimer = setTimeout(() => {
+    const s = $('statsOv');
+    s.textContent = `성공 ${stats.ok}/${stats.cmd} · Lv ${1+Math.floor((trainLv[breedKey]||0)/5)} · ${fpsNow}fps`;
+    s.style.display = 'block';
+  }, 600);
+});
+addEventListener('pointerup', e => {
+  clearTimeout(longTimer);
+  $('statsOv').style.display = 'none';
+  if (e.target.closest('#top,#breeds,#more,#drawer')) return;
+  if (performance.now() - pressAt < 300) {
+    const p = dogScreenPos();
+    if (Math.hypot(e.clientX - p.x, e.clientY - p.y) < 170) {   // 강아지 탭 = 쓰다듬기
+      wagPower = 1; earPerk = 1; mood('🧡', 1500);
+      emit('heart', p.x, p.y, 8);
+      if (Math.random() < 0.3) hopT = 0;
+    }
+  }
+});
+
+/* ─────────── 미니 UI 동작 ─────────── */
+$('more').addEventListener('click', () => $('drawer').classList.toggle('open'));
+document.querySelectorAll('#drawer .row button').forEach(b =>
+  b.addEventListener('click', () => command(b.dataset.c, 'btn')));
 document.querySelectorAll('#breeds button').forEach(b =>
   b.addEventListener('click', () => {
-    document.querySelectorAll('#breeds button').forEach(x=>x.classList.remove('sel'));
+    document.querySelectorAll('#breeds button').forEach(x => x.classList.remove('sel'));
     b.classList.add('sel');
-    breedKey = b.dataset.b; buildDog(breedKey);
-    const B = BREEDS[breedKey];
-    stats = { cmd:0, ok:0 }; failStreak = 0; updStats();
-    guide(`${B.name} 등장! ${B.desc} — "앉아!" 해보세요`);
-    log(`견종 교체 → ${B.name}`,'y');
+    breedKey = b.dataset.b;
+    stats = { cmd:0, ok:0 }; failStreak = 0;
+    buildDog(breedKey, true);
+    toast(BREEDS[breedKey].name);
   }));
+document.querySelectorAll('.dot').forEach(d =>
+  d.addEventListener('pointerdown', () => toast(d.dataset.n + (d.classList.contains('on') ? ' 작동 중' : ' 꺼짐'))));
 
 /* ─────────── 메인 루프 ─────────── */
-let prev = performance.now(), fpsAcc = 0, fpsN = 0, fpsAt = 0;
+let prev = performance.now(), fpsAcc = 0, fpsN = 0, fpsAt = 0, fpsNow = 0;
 function loop(t) {
   const dt = Math.min(0.05, (t - prev)/1000); prev = t;
   tickPose(dt); tickLife(dt, t/1000); tickVision(t);
-  drawHands(); drawWave(dt);
+  drawFx(dt); drawWave(dt);
   renderer.render(scene, camera3);
   fpsAcc += 1/dt; fpsN++;
-  if (t - fpsAt > 1000) { $('cFps').textContent = Math.round(fpsAcc/fpsN)+'fps'; fpsAcc=fpsN=0; fpsAt=t; }
-  if (awaitingPraise && performance.now() > praiseDeadline) {
-    awaitingPraise = false; guide('"앉아" · "엎드려" · "손" — 음성이나 손짓으로 명령해 보세요');
-  }
+  if (t - fpsAt > 1000) { fpsNow = Math.round(fpsAcc/fpsN); fpsAcc = fpsN = 0; fpsAt = t; }
   requestAnimationFrame(loop);
 }
-buildDog(breedKey); updStats();
-guide('카메라·마이크를 허용해 주세요 → 준비되면 "앉아!" 라고 말해보세요');
-log('멍스쿨 MVP v1 — 음성 파동·손 스켈레톤 시각화 탑재','y');
+buildDog(breedKey, true);
+setTimeout(() => { $('coach').style.opacity = 0; setTimeout(()=>$('coach').remove(), 700); }, 4200);
 requestAnimationFrame(loop);
 </script>
 </body>
