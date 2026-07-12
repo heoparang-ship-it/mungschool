@@ -167,6 +167,7 @@
   #commandDock button.expected { border-color:#ffcf6e; background:#4b3b25; box-shadow:0 0 0 2px rgba(255,207,110,.18),0 0 22px rgba(255,207,110,.16); animation:expectedPulse 1.25s ease-in-out infinite; }
   #commandDock button.fired { transform:translateY(-4px) scale(1.06); background:#2a8a75; border-color:#a3f2db; box-shadow:0 8px 22px rgba(95,212,181,.28); }
   #commandDock.waiting button { opacity:.45; }
+  body.arActive #commandDock, body.arActive #tapHint { display:none; }
   @keyframes expectedPulse{0%,100%{box-shadow:0 0 0 2px rgba(255,207,110,.15)}50%{box-shadow:0 0 0 5px rgba(255,207,110,.06),0 0 24px rgba(255,207,110,.24)}}
   button:focus-visible { outline:3px solid #ffcf86; outline-offset:2px; }
   #statusBadges { position:fixed; right:14px; top:14px; z-index:15; display:flex; gap:6px; }
