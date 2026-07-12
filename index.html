@@ -597,10 +597,10 @@ function renderDogMotion(track, progress, sequenceFrame) {
   dogSpriteCtx.translate(256+m.x,256+m.y);
   dogSpriteCtx.rotate(m.rot*Math.PI/180);
   dogSpriteCtx.scale(m.sx,m.sy);
-  drawDogSource(m.srcA,1-m.blend);
-  if (m.blend>0) drawDogSource(m.srcB,m.blend);
+  const visibleSource=m.blend<.5 ? m.srcA : m.srcB;
+  drawDogSource(visibleSource,1);
   dogSpriteCtx.restore(); dogSpriteCtx.globalAlpha=1;
-  dogFrameIndex=sequenceFrame; dogSourceFrame=m.blend>.5?m.srcB:m.srcA;
+  dogFrameIndex=sequenceFrame; dogSourceFrame=visibleSource;
   dogSpriteCanvas.dataset.pose = dogSpritePose;
   dogSpriteCanvas.dataset.frame = String(sequenceFrame);
   dogSpriteCanvas.dataset.sourceFrame = String(dogSourceFrame);
