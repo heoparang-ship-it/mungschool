@@ -908,8 +908,17 @@ $('clearLog').addEventListener('click',()=>{ eventLog=[]; persistEvents(); updat
 addEventListener('online',updateNetworkBadge); addEventListener('offline',updateNetworkBadge);
 
 /* ─────────── Three.js 무대 ─────────── */
-const renderer = new THREE.WebGLRenderer({ canvas:$('stage'), alpha:true, antialias:true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+let webglReady = false;
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas:$('stage'), alpha:true, antialias:true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  webglReady = true;
+} catch (error) {
+  renderer = { setPixelRatio(){}, setSize(){}, render(){} };
+  $('stage').style.display = 'none';
+  console.warn('WebGL unavailable: continuing with the 2D character fallback.');
+}
 const scene = new THREE.Scene();
 const camera3 = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
 camera3.position.set(0, 0.4, 5);
@@ -1670,7 +1679,7 @@ window.__MUNG__ = {
     companion:{...companionState}, dogPose:dogSpritePose, dogFrame:dogFrameIndex,
     dogSourceFrame, motionFps:MOTION_FPS,
     expected:currentStepDef()?.expected || null, awaitingPraise,
-    online:navigator.onLine, fps:fpsNow, eventCount:eventLog.length
+    online:navigator.onLine, fps:fpsNow, webglReady, eventCount:eventLog.length
   }),
   getEvents: () => eventLog.map(e=>({...e})),
   selectScenario: id => setScenario(id,'qa_api'),
