@@ -83,6 +83,7 @@
 - 서로 다른 자세를 투명하게 겹치지 않고 한 키포즈만 표시하도록 해 전환 중 이중 잔상을 제거했다.
 - 캡처: `motion-after-10.png`~`motion-after-14.png`, `motion-praise-00.png`~`motion-praise-04.png`, `motion-after-wrong-command.png`
 - 잔상 제거 재검증: `motion-after-no-ghost.png`
+- 공개 배포본 재검증: `public-motion30-final.png`
 - 재생 중 브라우저 오류: 0건
 
 ### 판정
