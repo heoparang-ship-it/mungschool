@@ -25,9 +25,17 @@
              border:3px solid rgba(95,212,181,.48); transform:perspective(500px) rotateX(68deg); }
   #dogSpriteWrap.success { animation:dogCelebrate .52s ease-out 1; }
   #dogSpriteWrap.error { animation:dogCorrect .35s ease-in-out 2; }
+  #dogSpriteWrap.commanding { animation:dogCommand .32s cubic-bezier(.2,.9,.3,1) 1; }
   @keyframes dogFloat{0%,100%{transform:translate(-50%,-50%) translateY(0)}50%{transform:translate(-50%,-50%) translateY(-7px)}}
   @keyframes dogCelebrate{0%{transform:translate(-50%,-50%) scale(1)}45%{transform:translate(-50%,-56%) scale(1.06)}100%{transform:translate(-50%,-50%) scale(1)}}
   @keyframes dogCorrect{0%,100%{transform:translate(-50%,-50%) rotate(0)}50%{transform:translate(-50%,-50%) rotate(-2deg)}}
+  @keyframes dogCommand{0%{transform:translate(-50%,-50%) scale(.96)}55%{transform:translate(-50%,-52%) scale(1.035)}100%{transform:translate(-50%,-50%) scale(1)}}
+  #interactionFlash { position:fixed; inset:0; z-index:6; pointer-events:none; opacity:0;
+                      background:radial-gradient(circle at 50% 52%,rgba(255,221,120,.4),rgba(95,212,181,.12) 38%,transparent 68%); }
+  body.impactSuccess #interactionFlash { animation:successFlash .62s ease-out 1; }
+  body.impactError #interactionFlash { background:radial-gradient(circle at 50% 52%,rgba(255,126,105,.28),transparent 65%); animation:errorFlash .45s ease-out 1; }
+  @keyframes successFlash{0%{opacity:0}22%{opacity:1}100%{opacity:0}}
+  @keyframes errorFlash{0%{opacity:0}35%{opacity:.9}100%{opacity:0}}
   #waveStrip { position:fixed; left:0; right:0; bottom:0; width:100vw; height:34px; z-index:4; pointer-events:none; }
   #edgeGlow { position:fixed; inset:0; pointer-events:none; z-index:5; opacity:0;
               box-shadow:inset 0 0 70px 12px rgba(255,159,67,.85); transition:opacity .12s; }
@@ -74,6 +82,43 @@
            border:1px solid rgba(255,255,255,.14); border-radius:14px; padding:9px 12px; backdrop-filter:blur(8px); }
   #brand strong { display:block; font-size:16px; letter-spacing:-.4px; }
   #brand span { display:block; margin-top:2px; color:#9fe3cb; font-size:10px; }
+  #companionHud { position:fixed; right:14px; top:58px; z-index:16; width:250px; padding:12px 13px;
+                  border-radius:17px; color:#fff; background:rgba(15,17,24,.82); border:1px solid rgba(255,255,255,.14);
+                  backdrop-filter:blur(10px); box-shadow:0 14px 36px rgba(0,0,0,.2); }
+  #companionHead { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  #companionName { font-size:15px; font-weight:900; letter-spacing:-.3px; }
+  #companionLevel { color:#ffcf86; font-size:11px; font-weight:900; }
+  #soundToggle { border:1px solid rgba(255,255,255,.16); border-radius:9px; padding:5px 7px; cursor:pointer;
+                 background:#303848; color:#dce4f3; font-size:9px; font-weight:800; }
+  #bondMeta { display:flex; justify-content:space-between; margin-top:9px; color:#b9c5d7; font-size:9px; }
+  #bondMeta strong { color:#9fe3cb; }
+  #bondTrack { height:8px; margin-top:5px; overflow:hidden; border-radius:999px; background:#293140; border:1px solid rgba(255,255,255,.08); }
+  #bondBar { width:0; height:100%; border-radius:999px; background:linear-gradient(90deg,#5fd4b5,#ffcf6e); transition:width .48s cubic-bezier(.2,.8,.3,1); }
+  #streakLine { margin-top:7px; color:#c8d3e3; font-size:9px; }
+  #streakLine strong { color:#ffcf86; }
+  #actionCallout { position:fixed; left:50%; top:16%; transform:translate(-50%,-12px) scale(.96); z-index:35;
+                   min-width:260px; max-width:min(520px,calc(100vw - 34px)); padding:12px 18px; opacity:0; pointer-events:none;
+                   border-radius:16px; color:#fff; text-align:center; background:rgba(15,17,24,.92); border:2px solid #5fd4b5;
+                   box-shadow:0 16px 50px rgba(0,0,0,.32),0 0 28px rgba(95,212,181,.2); transition:opacity .16s,transform .22s; }
+  #actionCallout.show { opacity:1; transform:translate(-50%,0) scale(1); }
+  #actionTitle { display:block; color:#ffcf86; font-size:22px; font-weight:1000; letter-spacing:-.6px; }
+  #actionSub { display:block; margin-top:2px; color:#dce4f3; font-size:10px; }
+  #rewardPop { position:fixed; left:50%; top:34%; z-index:37; opacity:0; pointer-events:none;
+               transform:translate(-50%,10px) scale(.8); color:#ffcf6e; font-size:28px; font-weight:1000;
+               text-shadow:0 4px 18px rgba(0,0,0,.45); }
+  #rewardPop.show { animation:rewardRise .9s cubic-bezier(.2,.8,.2,1) 1; }
+  @keyframes rewardRise{0%{opacity:0;transform:translate(-50%,18px) scale(.72)}22%{opacity:1;transform:translate(-50%,-4px) scale(1.08)}72%{opacity:1}100%{opacity:0;transform:translate(-50%,-52px) scale(.96)}}
+  #timingHud { position:fixed; left:50%; bottom:90px; z-index:16; width:min(340px,calc(100vw - 36px)); display:none;
+               transform:translateX(-50%); padding:10px 12px; border-radius:14px; color:#fff;
+               background:rgba(15,17,24,.9); border:1px solid rgba(255,207,110,.55); backdrop-filter:blur(8px); }
+  #timingHud.show { display:block; animation:timingIn .2s ease-out; }
+  @keyframes timingIn{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+  #timingHead { display:flex; justify-content:space-between; color:#ffcf86; font-size:10px; font-weight:900; }
+  #timingTrack { height:7px; margin-top:7px; overflow:hidden; border-radius:999px; background:#303848; }
+  #timingBar { width:100%; height:100%; background:linear-gradient(90deg,#5fd4b5,#ffcf6e,#ff8a6b); transform-origin:left; }
+  #tapHint { position:fixed; left:50%; top:77%; z-index:8; transform:translateX(-50%); color:#dce7f5;
+             padding:6px 10px; border-radius:999px; background:rgba(15,17,24,.72); border:1px solid rgba(255,255,255,.14);
+             box-shadow:0 8px 24px rgba(0,0,0,.18); font-size:10px; font-weight:800; opacity:.92; pointer-events:none; }
   #scenarioPanel { position:fixed; top:82px; left:14px; z-index:15; width:min(330px,calc(100vw - 28px));
                    background:rgba(15,17,24,.82); color:#fff; border:1px solid rgba(255,255,255,.14);
                    border-radius:18px; padding:13px; backdrop-filter:blur(10px); }
@@ -98,19 +143,24 @@
                  backdrop-filter:blur(10px); box-shadow:0 12px 32px rgba(0,0,0,.22); }
   #commandDock span { color:#9fe3cb; font-size:9px; font-weight:900; padding:0 3px; }
   #commandDock button { min-width:52px; border:1px solid rgba(255,255,255,.12); border-radius:10px; padding:9px 11px;
-                        background:#303848; color:#fff; font-size:11px; font-weight:800; cursor:pointer; }
+                        background:#303848; color:#fff; font-size:11px; font-weight:800; cursor:pointer;
+                        transition:transform .14s,background .18s,border-color .18s,box-shadow .18s; }
   #commandDock button.primary { background:#196b5d; border-color:#71d8bd; }
+  #commandDock button.expected { border-color:#ffcf6e; background:#4b3b25; box-shadow:0 0 0 2px rgba(255,207,110,.18),0 0 22px rgba(255,207,110,.16); animation:expectedPulse 1.25s ease-in-out infinite; }
+  #commandDock button.fired { transform:translateY(-4px) scale(1.06); background:#2a8a75; border-color:#a3f2db; box-shadow:0 8px 22px rgba(95,212,181,.28); }
+  #commandDock.waiting button { opacity:.45; }
+  @keyframes expectedPulse{0%,100%{box-shadow:0 0 0 2px rgba(255,207,110,.15)}50%{box-shadow:0 0 0 5px rgba(255,207,110,.06),0 0 24px rgba(255,207,110,.24)}}
   button:focus-visible { outline:3px solid #ffcf86; outline-offset:2px; }
   #statusBadges { position:fixed; right:14px; top:14px; z-index:15; display:flex; gap:6px; }
   .badge { border-radius:999px; padding:6px 9px; color:#dce4f3; background:rgba(15,17,24,.78);
            border:1px solid rgba(255,255,255,.14); font-size:9px; backdrop-filter:blur(8px); }
   .badge.good { color:#99f0cb; border-color:rgba(95,212,181,.5); }
   .badge.warn { color:#ffd18a; border-color:rgba(255,159,67,.5); }
-  #feedback { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:36;
-              width:min(520px,calc(100vw - 30px)); padding:18px 20px; border-radius:18px;
+  #feedback { position:fixed; top:49%; left:50%; transform:translate(-50%,-50%); z-index:36;
+              width:fit-content; min-width:min(280px,calc(100vw - 30px)); max-width:min(520px,calc(100vw - 30px)); padding:14px 20px; border-radius:18px;
               background:rgba(15,17,24,.92); color:#fff; text-align:center; font-size:16px; font-weight:900;
               line-height:1.55; opacity:0; pointer-events:none; transition:opacity .2s; }
-  #feedback.ok { box-shadow:0 0 0 2px #5fd4b5; } #feedback.no { box-shadow:0 0 0 2px #ff8a6b; }
+  #feedback.ok { box-shadow:0 0 0 2px #5fd4b5,0 18px 60px rgba(0,0,0,.3); } #feedback.no { box-shadow:0 0 0 2px #ff8a6b,0 18px 60px rgba(0,0,0,.3); }
   .modal { position:fixed; inset:0; z-index:50; display:none; align-items:center; justify-content:center;
            background:rgba(5,7,12,.76); padding:18px; }
   .modal.open { display:flex; }
@@ -136,6 +186,8 @@
   @media (max-width:760px) {
     #brand { top:7px; left:8px; padding:7px 9px; } #brand strong { font-size:13px; }
     #brand span { display:none; } #statusBadges { top:7px; right:7px; }
+    #companionHud { top:44px; right:8px; width:155px; padding:8px 9px; }
+    #companionName { font-size:12px; } #bondMeta,#streakLine { font-size:8px; } #soundToggle { padding:4px 5px; }
     #top { top:44px; } #breeds { display:none; }
     #scenarioPanel { top:82px; left:8px; width:calc(100vw - 16px); padding:10px; }
     #scenarioPanel h2 { display:none; } #scenarioButtons { grid-template-columns:repeat(4,1fr); }
@@ -148,6 +200,10 @@
     #commandDock button { min-width:0; flex:1; padding:9px 4px; font-size:10px; }
     #more { right:8px; bottom:58px; }
     #drawer { right:8px; bottom:104px; }
+    #actionCallout { top:24%; min-width:230px; } #actionTitle { font-size:18px; }
+    #rewardPop { top:38%; font-size:23px; }
+    #timingHud { bottom:86px; }
+    #tapHint { top:74%; font-size:9px; }
   }
   @media (prefers-reduced-motion:reduce) {
     *,*::before,*::after { animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; }
@@ -155,6 +211,7 @@
 </style>
 </head>
 <body>
+<div id="interactionFlash"></div>
 <video id="cam" autoplay playsinline webkit-playsinline muted></video>
 <canvas id="fx"></canvas>
 <canvas id="stage"></canvas>
@@ -175,6 +232,16 @@
   <div class="badge" id="networkBadge">온라인 확인</div>
 </div>
 
+<section id="companionHud" aria-label="가상견 성장 상태">
+  <div id="companionHead">
+    <div><strong id="companionName">멍이</strong> <span id="companionLevel">Lv.1</span></div>
+    <button id="soundToggle" type="button" aria-pressed="true">소리 켬</button>
+  </div>
+  <div id="bondMeta"><span>친밀도</span><strong id="bondValue">0 / 100</strong></div>
+  <div id="bondTrack"><div id="bondBar"></div></div>
+  <div id="streakLine">연속 성공 <strong id="streakValue">0</strong> · 최고 <strong id="bestStreakValue">0</strong></div>
+</section>
+
 <section id="scenarioPanel" aria-label="교육 시나리오">
   <h2>90초 행동교육 시나리오</h2>
   <div id="scenarioButtons">
@@ -194,6 +261,13 @@
 </section>
 
 <div id="feedback" role="status" aria-live="assertive"></div>
+<div id="actionCallout" role="status" aria-live="polite"><strong id="actionTitle">신호 준비</strong><span id="actionSub">멍이가 보호자를 바라봅니다.</span></div>
+<div id="rewardPop" aria-hidden="true">친밀도 상승</div>
+<div id="timingHud" role="status" aria-live="polite">
+  <div id="timingHead"><span>지금 칭찬하세요</span><strong id="timingSeconds">3.0초</strong></div>
+  <div id="timingTrack"><div id="timingBar"></div></div>
+</div>
+<div id="tapHint">강아지를 누르면 교감할 수 있어요</div>
 
 <div id="top">
   <div class="dot" id="dCam" data-n="카메라" role="status" aria-label="카메라 상태: 대기"></div>
@@ -352,6 +426,88 @@ function wordPop(text) {
   }, 620);
 }
 
+/* ─────────── 캐릭터 게임형 상호작용 피드백 ─────────── */
+let companionState = { level:1, bond:0, streak:0, bestStreak:0 };
+try { companionState = { ...companionState, ...JSON.parse(localStorage.getItem('mung-companion-v1') || '{}') }; } catch(e) {}
+let soundOn = true, sfxContext = null;
+
+function persistCompanion() {
+  try { localStorage.setItem('mung-companion-v1', JSON.stringify(companionState)); } catch(e) {}
+}
+function syncCompanion() {
+  $('companionLevel').textContent = `Lv.${companionState.level}`;
+  $('bondValue').textContent = `${companionState.bond} / 100`;
+  $('bondBar').style.width = `${companionState.bond}%`;
+  $('streakValue').textContent = companionState.streak;
+  $('bestStreakValue').textContent = companionState.bestStreak;
+}
+function ensureSfx() {
+  if (!soundOn) return null;
+  if (!sfxContext) sfxContext = new (window.AudioContext || window.webkitAudioContext)();
+  if (sfxContext.state === 'suspended') sfxContext.resume().catch(()=>{});
+  return sfxContext;
+}
+function sfxTone(freq, delay=0, duration=.1, type='sine', volume=.035) {
+  const ac = ensureSfx(); if (!ac) return;
+  const o=ac.createOscillator(), g=ac.createGain(), at=ac.currentTime+delay;
+  o.type=type; o.frequency.setValueAtTime(freq,at);
+  g.gain.setValueAtTime(.001,at); g.gain.exponentialRampToValueAtTime(volume,at+.012);
+  g.gain.exponentialRampToValueAtTime(.001,at+duration);
+  o.connect(g).connect(ac.destination); o.start(at); o.stop(at+duration+.02);
+}
+function playSfx(kind) {
+  if (!soundOn) return;
+  if (kind==='command') { sfxTone(360,0,.08,'triangle'); sfxTone(520,.07,.12,'triangle'); }
+  else if (kind==='success') { sfxTone(520,0,.1,'sine'); sfxTone(660,.08,.12,'sine'); sfxTone(880,.17,.18,'sine'); }
+  else if (kind==='error') { sfxTone(190,0,.16,'triangle',.025); sfxTone(145,.1,.2,'triangle',.02); }
+  else if (kind==='level') { [523,659,784,1047].forEach((f,i)=>sfxTone(f,i*.085,.18,'sine',.045)); }
+  else if (kind==='bond') { sfxTone(680,0,.08,'sine',.025); sfxTone(820,.06,.12,'sine',.03); }
+}
+function haptic(pattern) { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch(e) {} }
+function showAction(title, sub='', ms=900) {
+  const box=$('actionCallout'); $('actionTitle').textContent=title; $('actionSub').textContent=sub;
+  box.classList.add('show'); clearTimeout(showAction._t); showAction._t=setTimeout(()=>box.classList.remove('show'),ms);
+}
+function showReward(text) {
+  const el=$('rewardPop'); el.textContent=text; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+}
+function impact(kind='success') {
+  document.body.classList.remove('impactSuccess','impactError');
+  void document.body.offsetWidth; document.body.classList.add(kind==='error'?'impactError':'impactSuccess');
+  setTimeout(()=>document.body.classList.remove('impactSuccess','impactError'),700);
+}
+function markCommand(cmd) {
+  document.querySelectorAll('[data-c]').forEach(b=>b.classList.toggle('fired',b.dataset.c===cmd));
+  setTimeout(()=>document.querySelectorAll('[data-c]').forEach(b=>b.classList.remove('fired')),420);
+  const wrap=$('dogSpriteWrap'); wrap.classList.remove('commanding'); void wrap.offsetWidth; wrap.classList.add('commanding');
+  setTimeout(()=>wrap.classList.remove('commanding'),380);
+}
+function updateExpectedCommand() {
+  const expected=currentStepDef()?.expected;
+  $('commandDock').classList.toggle('waiting',expected==='pause');
+  document.querySelectorAll('#commandDock [data-c]').forEach(b=>b.classList.toggle('expected',b.dataset.c===expected));
+}
+function addBond(amount, reason='성공') {
+  const oldLevel=companionState.level;
+  companionState.bond += amount;
+  while (companionState.bond >= 100) { companionState.bond -= 100; companionState.level++; }
+  persistCompanion(); syncCompanion(); showReward(`+${amount} 친밀도 · ${reason}`);
+  if (companionState.level>oldLevel) { showAction(`레벨 ${companionState.level}`, '멍이와의 유대가 한 단계 깊어졌어요.',1800); playSfx('level'); levelUp(); }
+}
+function updateTimingHud(now=performance.now()) {
+  const hud=$('timingHud'), st=currentStepDef();
+  if (!awaitingPraise || !st?.deadlineMs) { hud.classList.remove('show'); return; }
+  const remain=Math.max(0,praiseDeadline-now), frac=Math.max(0,Math.min(1,remain/st.deadlineMs));
+  hud.classList.add('show');
+  $('timingSeconds').textContent=`${(remain/1000).toFixed(1)}초`;
+  $('timingBar').style.transform=`scaleX(${frac})`;
+}
+$('soundToggle').addEventListener('click',()=>{
+  soundOn=!soundOn; $('soundToggle').setAttribute('aria-pressed',String(soundOn));
+  $('soundToggle').textContent=soundOn?'소리 켬':'소리 끔'; if(soundOn){ensureSfx();playSfx('bond');}
+});
+syncCompanion();
+
 /* ─────────── 멍스쿨 캐릭터 모션 엔진 ───────────
    16개 연속 프레임을 실제 시간축으로 재생한다. 호흡·눈깜빡임, 앉기 전환,
    기다리기, 칭찬 반응이 정지 이미지 교체가 아니라 연속 동작으로 보인다. */
@@ -487,6 +643,7 @@ function renderScenario() {
     const selected = b.dataset.s===activeScenario;
     b.classList.toggle('sel', selected); b.setAttribute('aria-pressed', String(selected));
   });
+  updateExpectedCommand();
   updateOperator();
 }
 function enterStep() {
@@ -511,25 +668,41 @@ function setScenario(id, reason='select') {
   activeScenario = id; scenarioStep = 0; awaitingPraise = false;
   newSession(reason); poseNow('stand'); setDogSpritePose('stand'); sulkYaw = 0; wagPower = .2;
   renderScenario(); enterStep();
+  showAction(SCENARIOS[id].name, '첫 신호를 준비하세요.', 1150);
 }
 function acceptStep(cmd, src, latency) {
   const st = currentStepDef(); if (!st) return;
   session.success++; stats.ok++; trainLv[breedKey] = (trainLv[breedKey]||0) + 1;
+  companionState.streak++;
+  companionState.bestStreak=Math.max(companionState.bestStreak,companionState.streak);
+  persistCompanion(); syncCompanion();
   session.latencies.push(Math.round(latency));
   recordEvent('step_success', { input:cmd, source:src, latencyMs:Math.round(latency), expected:st.expected });
-  showFeedback(st.feedback, true);
+  showFeedback(st.feedback, true, 1150);
+  impact('success'); playSfx('success'); haptic([18,35,42]);
   if (cmd === 'praise') setDogSpritePose('happy', 'success');
   else if (cmd === 'pause') setDogSpritePose('calm', 'success');
   else setDogSpritePose(cmd, 'success');
-  const p = dogScreenPos(); emit('star', p.x, p.y, 10); wagPower = .8; earPerk = 1;
+  const bondGain=cmd==='praise' ? 16 : (cmd==='pause' ? 7 : 11);
+  const levelBefore=companionState.level;
+  addBond(bondGain, `${ACTION_KO[cmd] || cmd} 성공`);
+  if (companionState.level===levelBefore) setTimeout(()=>showAction('정확해요!', st.feedback, 1150), 110);
+  const p = dogScreenPos(); emit(cmd==='praise'?'heart':'star', p.x, p.y, 20); wagPower = .8; earPerk = 1;
+  const b=dogBase(); ringBurst(b.x,b.y,b.r*.85);
   scenarioStep++;
   setTimeout(enterStep, 1050);
 }
 function rejectStep(cmd, src, reason) {
   const st = currentStepDef();
   session.errors++; stats.error++; failStreak++;
+  companionState.streak=0; persistCompanion(); syncCompanion();
   recordEvent('step_error', { input:cmd, source:src, expected:st?.expected || null, reason });
-  sulkYaw = .5; mood('순서를 확인해 주세요', 900); showFeedback(reason, false, 1650);
+  const retryFeedback=st?.expected==='pause' ? '명령 없이 잠시 기다려 주세요.' :
+    (reason.includes('타이밍') ? '칭찬 타이밍을 놓쳤어요. 바로 다시!' : `“${ACTION_KO[st?.expected] || '다음'}” 신호를 선택하세요.`);
+  sulkYaw = .5; mood('순서를 확인해 주세요', 900); showFeedback(retryFeedback, false, 1450);
+  const retryTitle=st?.expected==='pause' ? '잠깐, 기다리는 차례예요' : `지금은 ${ACTION_KO[st?.expected] || '다음 행동'}!`;
+  showAction(retryTitle, '강조된 신호를 다시 확인해 주세요.', 1500);
+  impact('error'); playSfx('error'); haptic([28,45,28]);
   setDogSpritePose('excited', 'error');
   const returnPose = st?.expected === 'pause' ? 'calm' : (st?.expected === 'praise' ? 'happy' : 'stand');
   setTimeout(()=>{ sulkYaw=0; setDogSpritePose(returnPose); }, 950);
@@ -546,7 +719,13 @@ function completeScenario() {
                                       success:session.success, errors:session.errors });
   $('stepBar').style.width = '100%'; $('stepText').textContent = '상황을 완료했습니다.';
   $('stepHint').textContent = '결과카드에서 잘한 점과 다음 연습 행동을 확인하세요.';
-  mood('상황 완료', 2400); wagPower = 1; hopT = 0; setDogSpritePose('happy', 'success'); showResultCard(true);
+  const levelBefore=companionState.level;
+  addBond(25, '상황 완료');
+  mood('상황 완료', 2400); wagPower = 1; hopT = 0; setDogSpritePose('happy', 'success');
+  impact('success'); if (levelBefore===companionState.level) playSfx('level'); haptic([20,35,20,35,55]);
+  const p=dogScreenPos(), b=dogBase(); emit('star',p.x,p.y,28); emit('heart',p.x,p.y,18); ringBurst(b.x,b.y,b.r*1.15);
+  setTimeout(()=>showAction('상황 클리어!', levelBefore<companionState.level ? `멍이가 Lv.${companionState.level}로 성장했어요.` : '멍이와의 친밀도가 크게 올랐어요.', 1750), 130);
+  setTimeout(()=>showResultCard(true), 900);
 }
 function showResultCard(completed=session?.completed) {
   if (!session) return;
@@ -556,8 +735,8 @@ function showResultCard(completed=session?.completed) {
   $('scoreComplete').textContent = `${completion}%`;
   $('scoreCorrect').textContent = `${session.success}/${Math.max(session.attempts,total)}`;
   $('scoreLatency').textContent = avg === null ? '-' : `${avg}ms`;
-  $('resultSummary').textContent = `${s.name} · 익명 세션 ${session.id} · 영상·음성 원본 저장 없음`;
-  $('resultCoach').textContent = completed ? `잘한 점: ${s.good} 다음 연습: ${s.next}` : `현재 ${scenarioStep}/${total}단계를 완료했습니다. ${s.next}`;
+  $('resultSummary').textContent = `${s.name} · 멍이 Lv.${companionState.level} · 친밀도 ${companionState.bond}/100 · 영상·음성 원본 저장 없음`;
+  $('resultCoach').textContent = completed ? `연속 성공 ${companionState.streak}회. 잘한 점: ${s.good} 다음 연습: ${s.next}` : `현재 ${scenarioStep}/${total}단계를 완료했습니다. ${s.next}`;
   $('resultModal').classList.add('open');
   recordEvent('result_open', { completion });
 }
@@ -805,15 +984,20 @@ function tickMove(dt) {
 /* ─────────── 결정론적 행동 반응 엔진 ─────────── */
 let state = 'idle', busyUntil = 0, awaitingPraise = false, praiseDeadline = 0, failStreak = 0;
 let groundPulse = null, firstSuccess = true;
+const INPUT_SOURCE_KO = { btn:'버튼', voice:'음성', hand:'손짓', qa_api:'테스트' };
 function command(cmd, src) {
   const t = performance.now();
   if (t < busyUntil) return;
   const st = currentStepDef();
   if (!st || !session) return;
+  busyUntil=t+320;
+  ensureSfx(); markCommand(cmd); wordPop(cmdName(cmd) + '!');
+  showAction(`${cmdName(cmd)}!`, `${INPUT_SOURCE_KO[src] || '직접'} 신호가 멍이에게 전달됐어요.`, 520);
+  playSfx('command'); haptic(14);
   stats.cmd++; session.attempts++;
   recordEvent('input', { input:cmd, source:src, expected:st.expected });
   if (src === 'hand') fireBurst();
-  if (src === 'voice') { waveFlash = 1; wordPop(cmdName(cmd) + '!'); }
+  if (src === 'voice') waveFlash = 1;
   if (st.expected === 'pause') {
     rejectStep(cmd, src, '지금은 명령을 반복하지 않고 기다리는 단계입니다. 대기시간을 다시 시작합니다.');
     return;
@@ -873,11 +1057,19 @@ $('rS').value = placement.s;
 $('rS').addEventListener('input', e => { placement.s = +e.target.value; applyPlacement();
   localStorage.setItem('mung-place-v4', JSON.stringify(placement)); });
 function dogScreenPos() {
+  if (dogSpriteReady) {
+    const r=$('dogSpriteWrap').getBoundingClientRect();
+    return { x:r.left+r.width*.5, y:r.top+r.height*.42 };
+  }
   if (!dog) return { x:innerWidth/2, y:innerHeight/2 };
   const v = new THREE.Vector3(); parts.head.getWorldPosition(v); v.project(camera3);
   return { x:(v.x*0.5+0.5)*innerWidth, y:(-v.y*0.5+0.5)*innerHeight };
 }
 function dogBase() {
+  if (dogSpriteReady) {
+    const s=$('dogSpriteWrap').getBoundingClientRect();
+    return { x:s.left+s.width*.5, y:s.top+s.height*.82, r:Math.max(42,s.width*.29) };
+  }
   const v = new THREE.Vector3(dog.position.x, dog.position.y, 0); v.project(camera3);
   const x = (v.x*0.5+0.5)*innerWidth, y = (-v.y*0.5+0.5)*innerHeight;
   const v2 = new THREE.Vector3(dog.position.x + dogScale()*1.1, dog.position.y, 0); v2.project(camera3);
@@ -1008,6 +1200,7 @@ function useButtonMode() {
   voiceEnabled = false; if (rec) try { rec.stop(); } catch(e) {}
   videoReady = false; dot('dCam', false); dot('dMic', false);
   toast('버튼 체험을 시작합니다.');
+  showAction('훈련 시작', '강조된 신호를 눌러 멍이와 호흡을 맞춰 보세요.', 1500);
 }
 
 async function useCameraMode() {
@@ -1015,6 +1208,7 @@ async function useCameraMode() {
   await Promise.all([startCamera(), startAudioMeter()]);
   startVoice();
   toast('카메라 체험을 시작합니다.');
+  showAction('훈련 시작', '손짓과 목소리로 멍이에게 신호를 보내 보세요.', 1500);
 }
 
 $('startCameraMode').addEventListener('click', useCameraMode);
@@ -1164,7 +1358,7 @@ function drawFx(dt) {
       fctx.strokeStyle = 'rgba(255,159,67,.9)'; fctx.lineWidth = 5; fctx.stroke();
     }
     if (awaitingPraise) {
-      const remain = Math.max(0, (praiseDeadline - now)/5000);
+      const remain = Math.max(0, (praiseDeadline - now)/(currentStepDef()?.deadlineMs || 5000));
       fctx.beginPath();
       fctx.arc(b.x, b.y - b.r*0.9, b.r*1.15, -Math.PI/2, -Math.PI/2 + Math.PI*2*remain);
       fctx.strokeStyle = 'rgba(255,206,122,.95)'; fctx.lineWidth = 6;
@@ -1196,7 +1390,7 @@ function drawFx(dt) {
 }
 
 /* ─────────── 터치: 쓰다듬기 / 이동 / 길게 눌러 통계 ─────────── */
-let pressAt = 0, pressXY = null, longTimer = null;
+let pressAt = 0, pressXY = null, longTimer = null, lastPetBondAt = 0;
 addEventListener('pointerdown', e => {
   if (e.target.closest('#top,#breeds,#more,#drawer,#camFail')) return;
   pressAt = performance.now(); pressXY = [e.clientX, e.clientY];
@@ -1217,6 +1411,11 @@ addEventListener('pointerup', e => {
     if (Math.hypot(e.clientX - p.x, e.clientY - p.y) < petR) {   // 강아지 탭 = 쓰다듬기
       wagPower = 1; earPerk = 1; mood('친밀도 상승', 1500);
       emit('heart', p.x, p.y, 8);
+      ensureSfx(); playSfx('bond'); haptic(12);
+      if (performance.now()-lastPetBondAt>2400) {
+        lastPetBondAt=performance.now(); addBond(2,'교감');
+        showAction('멍이가 좋아해요', '쓰다듬기로 친밀도가 올랐어요.', 900);
+      }
       if (Math.random() < 0.3) hopT = 0;
     } else {                                                     // 빈 곳 탭 = 그 자리로 이동
       const w = screenToWorld(e.clientX, e.clientY);
@@ -1248,6 +1447,7 @@ function loop(t) {
   const dt = Math.min(0.05, (t - prev)/1000); prev = t;
   tickPose(dt); tickLife(dt, t/1000); tickMove(dt); tickVision(t);
   tickDogSprite(t);
+  updateTimingHud(t);
   drawFx(dt); drawWave(dt);
   renderer.render(scene, camera3);
   fpsAcc += 1/dt; fpsN++;
@@ -1260,6 +1460,8 @@ window.__MUNG__ = {
     scenario:activeScenario, scenarioName:SCENARIOS[activeScenario].name, step:scenarioStep,
     completed:!!session?.completed, sessionId:session?.id || null, attempts:session?.attempts || 0,
     success:session?.success || 0, errors:session?.errors || 0, character:breedKey,
+    companion:{...companionState}, dogPose:dogSpritePose, dogFrame:dogFrameIndex,
+    expected:currentStepDef()?.expected || null, awaitingPraise,
     online:navigator.onLine, fps:fpsNow, eventCount:eventLog.length
   }),
   getEvents: () => eventLog.map(e=>({...e})),
