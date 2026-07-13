@@ -227,6 +227,18 @@
   @media (prefers-reduced-motion:reduce) {
     *,*::before,*::after { animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; }
   }
+  /* 정보는 행동에 필요한 순간에만 노출한다. */
+  #brand span, #statusBadges, #scenarioPanel h2, #scenarioGoal, #stepHint,
+  #actionSub, #bondMeta, #streakLine, #arGuide small, #welcomeModal p, .welcomeList,
+  #commandDock span { display:none; }
+  #brand { padding:8px 11px; }
+  #companionHud { width:170px; padding:10px 11px; }
+  #scenarioPanel { width:min(300px,calc(100vw - 28px)); padding:10px; }
+  #stepCard { width:min(360px,calc(100vw - 76px)); padding:12px 14px; }
+  #stepText { margin-top:8px; }
+  #feedback { min-width:180px; padding:11px 16px; font-size:15px; }
+  #welcomeModal .modalCard { width:min(430px,100%); padding:22px; }
+  #welcomeModal .modalActions { margin-top:14px; }
 </style>
 </head>
 <body>
@@ -236,19 +248,19 @@
 <canvas id="stage"></canvas>
 <div id="dogSpriteWrap"><div id="dogAura"></div><canvas id="dogSprite" width="512" height="512" aria-label="가상 반려견 캐릭터"></canvas></div>
 <canvas id="waveStrip"></canvas>
-<div id="arGuide" aria-live="polite"><span class="arChip" id="arChipText">AR 공간 준비 중</span><strong id="arGuideTitle">카메라로 바닥을 비춰주세요</strong><small id="arGuideDetail">바닥을 한 번 누르면 멍이가 현실 공간에 소환됩니다.</small></div>
-<div id="handChip" role="status" aria-live="polite">손을 화면 안에 보여주세요 · 실시간 인식 대기</div>
-<div id="voiceChip" role="status" aria-live="polite">🎙 목소리를 듣는 중 · “앉아”, “기다려”</div>
+<div id="arGuide" aria-live="polite"><span class="arChip" id="arChipText">AR 준비</span><strong id="arGuideTitle">바닥을 비춰주세요</strong><small id="arGuideDetail">화면을 눌러 멍이를 배치합니다.</small></div>
+<div id="handChip" role="status" aria-live="polite">손 인식 대기</div>
+<div id="voiceChip" role="status" aria-live="polite">🎙 음성 대기</div>
 <div id="edgeGlow"></div>
 <div id="wordPop"></div>
 <div id="mood"></div>
 <div id="toast"></div>
 <div id="statsOv"></div>
-<div id="camFail">카메라를 켤 수 없어요<br>Safari 또는 Chrome에서 권한을 허용한 뒤 다시 시도해 주세요<br>
-  <button id="retryCam" type="button">카메라 다시 시도</button>
-  <button id="useButtonMode" type="button">버튼으로 계속</button></div>
+<div id="camFail">카메라를 사용할 수 없어요
+  <button id="retryCam" type="button">다시 시도</button>
+  <button id="useButtonMode" type="button">버튼 체험</button></div>
 
-<div id="brand"><strong>멍스쿨 <small>v6 AR</small></strong><span>배송미 행동 프로토콜 · 손·음성 공간상호작용</span></div>
+<div id="brand"><strong>멍스쿨 <small>AR</small></strong><span>행동훈련</span></div>
 <div id="statusBadges">
   <div class="badge good" id="privacyBadge">원본 저장 0</div>
   <div class="badge" id="networkBadge">온라인 확인</div>
@@ -267,10 +279,10 @@
 <section id="scenarioPanel" aria-label="교육 시나리오">
   <h2>90초 행동교육 시나리오</h2>
   <div id="scenarioButtons">
-    <button data-s="meeting">01 첫 만남</button>
-    <button data-s="wait">02 기다려</button>
-    <button data-s="reward">03 보상 타이밍</button>
-    <button data-s="calm">04 흥분 대처</button>
+    <button data-s="meeting">첫 만남</button>
+    <button data-s="wait">기다려</button>
+    <button data-s="reward">보상</button>
+    <button data-s="calm">진정</button>
   </div>
 </section>
 
@@ -284,12 +296,12 @@
 
 <div id="feedback" role="status" aria-live="assertive"></div>
 <div id="actionCallout" role="status" aria-live="polite"><strong id="actionTitle">신호 준비</strong><span id="actionSub">멍이가 보호자를 바라봅니다.</span></div>
-<div id="rewardPop" aria-hidden="true">친밀도 상승</div>
+<div id="rewardPop" aria-hidden="true">+ 친밀도</div>
 <div id="timingHud" role="status" aria-live="polite">
   <div id="timingHead"><span>지금 칭찬하세요</span><strong id="timingSeconds">3.0초</strong></div>
   <div id="timingTrack"><div id="timingBar"></div></div>
 </div>
-<div id="tapHint">강아지를 누르면 교감할 수 있어요</div>
+<div id="tapHint">터치해 교감</div>
 
 <div id="top">
   <div class="dot" id="dCam" data-n="카메라" role="status" aria-label="카메라 상태: 대기"></div>
@@ -337,17 +349,17 @@
 
 <div class="modal open" id="welcomeModal" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
   <div class="modalCard">
-    <div class="welcomeKicker">실제 개 없이 먼저 연습하는 행동교육</div>
-    <h2 id="welcomeTitle">멍스쿨 체험을 시작할까요?</h2>
-    <p>현실 카메라 위에 가상견을 소환해 기다림과 보상 타이밍을 연습합니다. 카메라 모드에서는 손짓과 음성이 멍이의 시선·행동·감정 변화로 이어집니다.</p>
+    <div class="welcomeKicker">AR 행동훈련</div>
+    <h2 id="welcomeTitle">멍이를 소환할까요?</h2>
+    <p>카메라 AR 또는 버튼 체험</p>
     <div class="welcomeList">
       <div><strong>AR 공간 체험</strong><br>카메라로 바닥을 비춘 뒤 한 번 눌러 멍이를 배치합니다. 이후 훈련은 손짓과 목소리로 진행합니다.</div>
       <div><strong>배송미 행동 프로토콜</strong><br>첫 만남, 기다려, 보상 타이밍, 흥분 대처의 4개 상황을 단계별로 안내합니다.</div>
       <div><strong>개인정보 최소화</strong><br>영상과 음성 원본은 저장하지 않으며 익명 행동 이벤트만 이 기기에 남깁니다.</div>
     </div>
     <div class="modalActions">
-      <button id="startCameraMode" type="button">AR 카메라로 멍이 소환</button>
-      <button id="startButtonMode" type="button" class="alt">권한 없이 버튼 체험</button>
+      <button id="startCameraMode" type="button">AR 시작</button>
+      <button id="startButtonMode" type="button" class="alt">버튼 체험</button>
     </div>
   </div>
 </div>
@@ -557,9 +569,9 @@ const MOTION_FPS = 30;
 const motionKey = (t,src,x=0,y=0,sx=1,sy=1,rot=0) => ({t,src,x,y,sx,sy,rot});
 const DOG_MOTIONS = {
   stand:{ duration:2600, loop:true, keys:[
-    motionKey(0,0,0,1), motionKey(.16,1,-1,0,1.002,.998,-.25), motionKey(.33,2,1,-2,.998,1.006,.2),
-    motionKey(.5,3,0,0,1.004,.996,0), motionKey(.67,2,-1,-2,.999,1.006,-.2),
-    motionKey(.84,1,1,0,1.002,.998,.25), motionKey(1,0,0,1)
+    motionKey(0,14,0,1), motionKey(.16,14,-1,0,1.002,.998,-.25), motionKey(.33,14,1,-2,.998,1.006,.2),
+    motionKey(.5,14,0,0,1.004,.996,0), motionKey(.67,14,-1,-2,.999,1.006,-.2),
+    motionKey(.84,14,1,0,1.002,.998,.25), motionKey(1,14,0,1)
   ]},
   sit:{ duration:1000, loop:false, keys:[
     motionKey(0,0,0,1), motionKey(.12,4,0,-7,.985,1.025,-1), motionKey(.3,5,-1,0,1.01,.99,-.4),
@@ -807,7 +819,7 @@ function acceptStep(cmd, src, latency) {
   persistCompanion(); syncCompanion();
   session.latencies.push(Math.round(latency));
   recordEvent('step_success', { input:cmd, source:src, latencyMs:Math.round(latency), expected:st.expected });
-  showFeedback(st.feedback, true, 1150);
+  showFeedback(`${ACTION_KO[cmd] || '완료'} ✓`, true, 1000);
   impact('success'); playSfx('success'); haptic([18,35,42]);
   if (cmd === 'praise') setDogSpritePose('happy', 'success');
   else if (cmd === 'pause') setDogSpritePose('calm', 'success');
@@ -815,7 +827,7 @@ function acceptStep(cmd, src, latency) {
   const bondGain=cmd==='praise' ? 16 : (cmd==='pause' ? 7 : 11);
   const levelBefore=companionState.level;
   addBond(bondGain, `${ACTION_KO[cmd] || cmd} 성공`);
-  if (companionState.level===levelBefore) setTimeout(()=>showAction('정확해요!', st.feedback, 1150), 110);
+  if (companionState.level===levelBefore) setTimeout(()=>showAction('정확해요!', '', 950), 110);
   const p = dogScreenPos(); emit(cmd==='praise'?'heart':'star', p.x, p.y, 20); wagPower = .8; earPerk = 1;
   const b=dogBase(); ringBurst(b.x,b.y,b.r*.85);
   scenarioStep++;
@@ -847,7 +859,7 @@ function completeScenario() {
   session.completed = true; awaitingPraise = false;
   recordEvent('scenario_complete', { elapsedMs:Date.now()-session.startedAt, attempts:session.attempts,
                                       success:session.success, errors:session.errors });
-  $('stepBar').style.width = '100%'; $('stepText').textContent = '상황을 완료했습니다.';
+  $('stepBar').style.width = '100%'; $('stepText').textContent = '완료!';
   $('stepHint').textContent = '결과카드에서 잘한 점과 다음 연습 행동을 확인하세요.';
   const levelBefore=companionState.level;
   addBond(25, '상황 완료');
@@ -1110,8 +1122,8 @@ function placeARDog(sx, sy, announce=true) {
   arPlacement.placed = true; applyARPlacement(); persistARPlacement();
   const p=dogScreenPos(); emit('spark',p.x,p.y,14); ringBurst(p.x,p.y,Math.max(44,innerWidth*.05));
   wagPower=1; earPerk=1; setDogSpritePose('attentive','success');
-  setARGuide('AR 공간 고정됨', '멍이가 이 공간을 기억해요', '손짓과 목소리로 명령을 보내면 멍이가 당신을 바라보고 반응합니다.');
-  $('tapHint').textContent='멍이 주변 빈 바닥을 누르면 위치를 조정할 수 있어요';
+  setARGuide('AR 고정', '멍이 소환 완료', '손짓과 목소리로 훈련합니다.');
+  $('tapHint').textContent='빈 바닥을 눌러 이동';
   if (announce) showAction('멍이 소환 완료', '이제 손과 목소리로 멍이에게 신호를 보내 보세요.', 1800);
 }
 function tickMove(dt) {
@@ -1248,7 +1260,7 @@ async function startCamera() {
   videoReady = false; $('camFail').style.display = 'none';
   arPlacement.placed = false; persistARPlacement();
   document.body.classList.add('arActive'); document.body.classList.remove('arReady');
-  setARGuide('카메라 권한 요청 중', '카메라 권한을 허용해 주세요', '허용되면 실제 공간 위에 멍이를 배치할 수 있습니다.');
+  setARGuide('카메라 권한', '허용해 주세요', '실제 공간에 멍이를 배치합니다.');
   const wants = [
     { video: { facingMode: facing === 'environment' ? { ideal:'environment' } : 'user',
                width:{ ideal:1280 }, height:{ ideal:720 } }, audio:false },
@@ -1261,7 +1273,7 @@ async function startCamera() {
   }
   if (!ok) {
     dot('dCam', false); document.body.classList.remove('cameraActive','arReady');
-    setARGuide('카메라 연결 실패', '카메라 권한을 확인해 주세요', '인앱 브라우저라면 Safari 또는 Chrome에서 다시 열어 주세요.');
+    setARGuide('카메라 실패', '권한을 확인하세요', 'Safari 또는 Chrome에서 다시 시도합니다.');
     $('camFail').style.display = 'flex'; return false;
   }
   video.srcObject = stream;
@@ -1273,8 +1285,8 @@ async function startCamera() {
   try { await video.play(); } catch(e) {}               // 자동재생 강제
   const ready = () => {
     videoReady = true; dot('dCam', true); document.body.classList.add('arReady');
-    setARGuide(arPlacement.placed ? 'AR 공간 고정됨' : '바닥 찾기 완료', arPlacement.placed ? '멍이가 이 공간에 있어요' : '바닥을 한 번 눌러 멍이를 소환하세요', arPlacement.placed ? '손짓과 목소리로 바로 훈련할 수 있습니다.' : '손 골격과 목소리 인식이 화면에 표시됩니다.');
-    setHandStatus('손을 화면 안에 보여주세요 · 실시간 인식 대기');
+    setARGuide(arPlacement.placed ? 'AR 고정' : '바닥 인식', arPlacement.placed ? '멍이 준비 완료' : '바닥을 눌러 소환', arPlacement.placed ? '훈련을 시작합니다.' : '손과 음성을 인식합니다.');
+    setHandStatus('손 인식 대기');
   };
   video.onloadeddata = ready;
   if (video.readyState >= 2) ready();
@@ -1443,9 +1455,9 @@ function tickVision(t) {
                    icon: known ? GESTURE_KO[g.categoryName] : '',
                    known, score: g ? g.score : 0, ts: performance.now() };
       lastHandSeen = performance.now();
-      setHandStatus(known ? `${GESTURE_KO[g.categoryName]} 인식 · 유지하면 멍이에게 전달됩니다` : '손 골격을 추적 중 · 손바닥을 천천히 보여주세요');
+      setHandStatus(known ? `${GESTURE_KO[g.categoryName]} 인식` : '손 추적 중');
     } else if (performance.now() - lastHandSeen > 800) {
-      setHandStatus('손을 화면 안에 보여주세요 · 실시간 인식 대기');
+      setHandStatus('손 인식 대기');
     }
     const now = performance.now();
     if (known) {
@@ -1454,7 +1466,7 @@ function tickVision(t) {
       if (handSnap) handSnap.hold = Math.min(1, held/500);
       if (held >= 500 && (g.categoryName !== lastFired || now - lastFiredAt > 2500)) {
         lastFired = g.categoryName; lastFiredAt = now; holdStart = now;
-        setHandStatus(`${GESTURE_KO[g.categoryName]} 전달 완료 · 멍이가 반응합니다`);
+        setHandStatus(`${GESTURE_KO[g.categoryName]} 전달`);
         wordPop(cmdName(GESTURE_MAP[g.categoryName]) + '!');
         command(GESTURE_MAP[g.categoryName], 'hand');
       }
