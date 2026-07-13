@@ -569,9 +569,9 @@ const MOTION_FPS = 30;
 const motionKey = (t,src,x=0,y=0,sx=1,sy=1,rot=0) => ({t,src,x,y,sx,sy,rot});
 const DOG_MOTIONS = {
   stand:{ duration:2600, loop:true, keys:[
-    motionKey(0,14,0,1), motionKey(.16,14,-1,0,1.002,.998,-.25), motionKey(.33,14,1,-2,.998,1.006,.2),
-    motionKey(.5,14,0,0,1.004,.996,0), motionKey(.67,14,-1,-2,.999,1.006,-.2),
-    motionKey(.84,14,1,0,1.002,.998,.25), motionKey(1,14,0,1)
+    motionKey(0,0,0,1), motionKey(.16,1,-1,0,1.002,.998,-.25), motionKey(.33,2,1,-2,.998,1.006,.2),
+    motionKey(.5,3,0,0,1.004,.996,0), motionKey(.67,2,-1,-2,.999,1.006,-.2),
+    motionKey(.84,1,1,0,1.002,.998,.25), motionKey(1,0,0,1)
   ]},
   sit:{ duration:1000, loop:false, keys:[
     motionKey(0,0,0,1), motionKey(.12,4,0,-7,.985,1.025,-1), motionKey(.3,5,-1,0,1.01,.99,-.4),
@@ -695,7 +695,7 @@ dogSpriteImg.src = 'data:image/webp;base64,UklGRj4nAwBXRUJQVlA4WAoAAAAQAAAA5QQA5
 
 const defaultDogSpriteSrc = dogSpriteImg.src;
 function loadDogSpriteForBreed(key) {
-  const next = key === 'chihuahua' ? 'assets/chihuahua-ar-sprite-v1.png' : defaultDogSpriteSrc;
+  const next = key === 'chihuahua' ? 'assets/chihuahua-angry-v2.png' : defaultDogSpriteSrc;
   if (dogSpriteImg.dataset.source === next) return;
   dogSpriteImg.dataset.source = next;
   dogSpriteReady = false; dogFrameIndex = -1;
