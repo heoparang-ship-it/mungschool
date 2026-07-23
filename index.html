@@ -420,7 +420,8 @@
     background:rgba(255,255,255,.78); border:1px solid rgba(70,163,140,.28); border-radius:999px;
     padding:7px 12px; box-shadow:0 7px 24px rgba(58,102,91,.11); backdrop-filter:blur(8px); pointer-events:none;
   }
-  #virtualHand { position:fixed; inset:0; width:100vw; height:100vh; z-index:13; pointer-events:none; }
+  #hand3d { position:fixed; inset:0; width:100vw; height:100vh; z-index:13; pointer-events:none; }
+  #virtualHand { position:fixed; inset:0; width:100vw; height:100vh; z-index:14; pointer-events:none; }
   #simBrand {
     position:fixed; z-index:18; left:28px; top:24px; display:flex; align-items:center; gap:10px;
     color:var(--sim-ink); font-size:18px; font-weight:1000; letter-spacing:-.6px; pointer-events:none;
@@ -530,6 +531,7 @@
 <div id="simDogState" role="status" aria-live="polite">경계</div>
 <div id="simInstruction" role="status" aria-live="polite">50cm 시작선에서 잠시 멈춰 주세요</div>
 <div id="simPrivacy">카메라는 인식에만 사용 · 원본 저장 0</div>
+<canvas id="hand3d" aria-label="실시간 3D 손"></canvas>
 <canvas id="virtualHand" aria-label="실시간으로 인식된 1인칭 손"></canvas>
 <div id="interactionFlash"></div>
 <video id="cam" autoplay playsinline webkit-playsinline muted></video>
@@ -633,7 +635,8 @@
     <button id="resetSession">세션 초기화</button>
   </div>
   <label>크기 <input type="range" id="rS" min="0.4" max="2.5" step="0.05" value="1"></label>
-  <div id="folder">익명 이벤트만 이 기기에 저장 · 영상·음성 원본 저장 안 함</div>
+  <label>손 불투명도 <input type="range" id="rHandOp" min="0.15" max="1" step="0.05" value="0.5"></label>
+  <div id="folder">익명 이벤트만 이 기기에 저장 · 영상·음성 원본 저장 안 함<br>손 모델 “The Hand” by sayjing (Sketchfab · Free Standard)</div>
 </div>
 
 <div class="modal open" id="welcomeModal" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
@@ -694,8 +697,12 @@
   </div>
 </div>
 
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}
+</script>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
 import { FilesetResolver, GestureRecognizer, FaceDetector }
   from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
 
@@ -1346,6 +1353,7 @@ function sizeAll() {
   virtualHandCanvas.width=Math.round(innerWidth*dpr); virtualHandCanvas.height=Math.round(innerHeight*dpr);
   virtualHandCtx.setTransform(dpr,0,0,dpr,0,0);
   simHandDraw.x=innerWidth*.72; simHandDraw.y=innerHeight*.72;
+  try { sizeHand3d(); } catch(e) {}   // hand3d 선언 전 최초 호출은 무시 (선언 직후 자체 사이징)
 }
 addEventListener('resize', sizeAll); sizeAll();
 
@@ -1927,6 +1935,238 @@ function computeHandCurl(pts) {
   }
   return n?sum/n:0;
 }
+function fingerCurls(pts) {
+  // 손가락별 굽힘 0~1 (3D 손 관절 구동용). 손목 기준 비율이라 거리와 무관.
+  const wrist=pts[0], dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+  const def={ index:[5,8], middle:[9,12], ring:[13,16], pinky:[17,20], thumb:[2,4] };
+  const out={};
+  for (const [f,[mcp,tip]] of Object.entries(def)) {
+    const base=dist(wrist,pts[mcp])||1;
+    const r=dist(wrist,pts[tip])/base;
+    out[f]= f==='thumb' ? clamp01((1.32-r)/.5) : clamp01((1.75-r)/.85);
+  }
+  return out;
+}
+
+/* ─────────── 3D 손 · 리깅 GLB 고스트 렌더 ───────────
+   'The Hand' by sayjing (Sketchfab · Free Standard · 크레딧 표기).
+   ① z깊이: 손바닥 길이(랜드마크 0↔9)를 캘리브레이션해 카메라 앞뒤로 실제 이동
+      → 원근이 크기 변화·왜곡을 물리적으로 만든다 (가까이=크게, 멀리=작게).
+   ② 손가락: GLB의 GrabHold 애니메이션을 손가락별 curl 값으로 개별 샘플링
+      → 아티스트가 만든 관절 궤적을 실측 굽힘으로 구동.
+   ③ 고스트: 강아지 우선 원칙 — depth-prepass로 내부 겹침 없는 균일 반투명(기본 50%).
+   로드 실패(오프라인 등) 시 기존 2D 일러스트 손으로 자동 폴백. */
+const HAND3D_FOV = 38;
+const HAND3D_ORIENT = [Math.PI/2, 0, 0];  // GLB 축 보정: 손등 정면·손가락 위 (프로브로 확정)
+const HAND3D_BASE_TILT = (()=>{ const v=parseFloat(new URLSearchParams(location.search).get('handTilt'));
+  return Number.isFinite(v) ? v : 2.05; })();    // 뷰 공간 기울기 보정 (실측 확정 · ?handTilt= 로 튜닝)
+const HAND3D_GRAB_FROM_OPEN = true;       // GrabHold가 펴짐→쥠 방향인지 여부
+let hand3dRenderer=null, hand3dScene=null, hand3dShadowScene=null, hand3dCam=null;
+let hand3dRoot=null, hand3dOrient=null, hand3dInner=null, hand3dReady=false, hand3dMats=[], hand3dPrepass=null;
+let hand3dSkins=[], hand3dFixStep=0;      // 첫 렌더 후 실측 바운딩으로 스케일·중심 재보정
+let fingerSamplers=null, grabClipDuration=0, handShadow=null;
+let hand3dOpacity = (()=>{ const v=parseFloat(new URLSearchParams(location.search).get('handOpacity'));
+  if (Number.isFinite(v)) return Math.min(1,Math.max(.1,v));
+  try { const s=parseFloat(localStorage.getItem('mung-hand-opacity')); if (Number.isFinite(s)) return Math.min(1,Math.max(.1,s)); } catch(e){}
+  return .5; })();
+const hand3dPose = { x:0, y:-1, z:2.4, rz:-.15, curls:{index:.22,middle:.22,ring:.22,pinky:.22,thumb:.22} };
+const hand3dDepth = { samples:[], base:0, ratio:1 };
+try {
+  hand3dRenderer = new THREE.WebGLRenderer({ canvas:$('hand3d'), alpha:true, antialias:true });
+  hand3dRenderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  hand3dRenderer.autoClear = false;
+  hand3dScene = new THREE.Scene();
+  hand3dShadowScene = new THREE.Scene();
+  hand3dCam = new THREE.PerspectiveCamera(HAND3D_FOV, innerWidth/innerHeight, .1, 100);
+  hand3dCam.position.set(0,0,6);
+  hand3dScene.add(new THREE.HemisphereLight(0xfff8ee, 0xffc7b3, 1.5));
+  const hk=new THREE.DirectionalLight(0xfff4e6,1.15); hk.position.set(-2,4,6); hand3dScene.add(hk);
+  const hf=new THREE.DirectionalLight(0xffc9b8,.85); hf.position.set(2.5,-3.5,3); hand3dScene.add(hf);
+  hand3dPrepass = new THREE.MeshBasicMaterial({ colorWrite:false });
+  const shCv=document.createElement('canvas'); shCv.width=shCv.height=128;
+  const shCtx=shCv.getContext('2d');
+  const sg=shCtx.createRadialGradient(64,64,6,64,64,62);
+  sg.addColorStop(0,'rgba(30,66,56,.55)'); sg.addColorStop(1,'rgba(30,66,56,0)');
+  shCtx.fillStyle=sg; shCtx.fillRect(0,0,128,128);
+  handShadow=new THREE.Sprite(new THREE.SpriteMaterial({ map:new THREE.CanvasTexture(shCv), transparent:true, depthWrite:false }));
+  hand3dShadowScene.add(handShadow);
+} catch(e) { hand3dRenderer=null; console.warn('3D 손 렌더러 초기화 실패 — 2D 손 폴백', e); }
+function sizeHand3d(){
+  if (!hand3dRenderer) return;
+  hand3dRenderer.setSize(innerWidth, innerHeight);
+  hand3dCam.aspect=innerWidth/innerHeight; hand3dCam.updateProjectionMatrix();
+}
+sizeHand3d();
+$('rHandOp').value = hand3dOpacity;
+$('rHandOp').addEventListener('input', e => {
+  hand3dOpacity = +e.target.value;
+  try { localStorage.setItem('mung-hand-opacity', String(hand3dOpacity)); } catch(err) {}
+});
+if (hand3dRenderer) new GLTFLoader().load('assets/the-hand.glb', gltf => {
+  try {
+    const src=gltf.scene;
+    src.traverse(o=>{ if (o.isMesh||o.isSkinnedMesh){
+      if (o.name==='Object_7'){ o.visible=false; return; }   // 손목 내부 캡 메시 — 고스트 렌더에서 잡티로 보여 숨김
+      o.frustumCulled=false;
+      o.material=new THREE.MeshStandardMaterial({ color:0xffe3d0, roughness:.92, metalness:0,
+        transparent:true, opacity:hand3dOpacity, depthWrite:false, side:THREE.FrontSide });
+      hand3dMats.push(o.material);
+      if (o.isSkinnedMesh) hand3dSkins.push(o);
+    }});
+    // 스킨 적용 후 실제 렌더 바운딩으로 정규화 (Sketchfab FBX 스킨 스케일 불일치 대응)
+    src.updateMatrixWorld(true);
+    const box=new THREE.Box3();
+    src.traverse(o=>{ if (o.isSkinnedMesh){ o.computeBoundingBox();
+      box.union(o.boundingBox.clone().applyMatrix4(o.matrixWorld)); }});
+    const size=box.getSize(new THREE.Vector3()), center=box.getCenter(new THREE.Vector3());
+    const s=1.5/Math.max(size.x,size.y,size.z,1e-6);
+    const inner=new THREE.Group(); inner.add(src);
+    src.position.copy(center).negate();
+    inner.scale.setScalar(s);
+    hand3dInner=inner; hand3dFixStep=1;
+    hand3dOrient=new THREE.Group(); hand3dOrient.add(inner);
+    hand3dOrient.rotation.set(HAND3D_ORIENT[0],HAND3D_ORIENT[1],HAND3D_ORIENT[2]);
+    hand3dRoot=new THREE.Group(); hand3dRoot.add(hand3dOrient);
+    hand3dScene.add(hand3dRoot);
+    const clip=(gltf.animations||[]).find(a=>/hold/i.test(a.name)) || (gltf.animations||[])[0];
+    grabClipDuration=clip?clip.duration:0;
+    const boneMap={}; src.traverse(o=>{ if(o.isBone) boneMap[o.name]=o; });
+    const FINGER_BONES={
+      index:['Finger_Index1_04','Finger_Index2_05','Finger_Index3_06'],
+      middle:['Finger_Middle1_08','Finger_Middle2_09','Finger_Middle3_010'],
+      ring:['Finger_Ring1_012','Finger_Ring2_013','Finger_Ring3_014'],
+      pinky:['Finger_Pinky1_016','Finger_Pinky2_017','Finger_Pinky3_018'],
+      thumb:['Finger_Thumb1_020','Finger_Thumb2_021','Finger_Thumb3_022'] };
+    fingerSamplers={};
+    if (clip) for (const [f,names] of Object.entries(FINGER_BONES)){
+      fingerSamplers[f]=[];
+      for (const nm of names){
+        const tr=clip.tracks.find(t=>t.name===nm+'.quaternion');
+        if (tr && boneMap[nm]) fingerSamplers[f].push({ bone:boneMap[nm], interp:tr.createInterpolant() });
+      }
+    }
+    hand3dReady=true;
+    recordEvent?.('hand3d_ready',{ credit:'The Hand by sayjing (Sketchfab)' });
+  } catch(e){ console.warn('3D 손 구성 실패 — 2D 손 폴백', e); }
+}, undefined, () => { /* 로드 실패(오프라인 등) → 2D 손 폴백 */ });
+function applyFingerCurl(name, curl){
+  const list=fingerSamplers?.[name]; if (!list||!list.length||!grabClipDuration) return;
+  const k=clamp01(HAND3D_GRAB_FROM_OPEN?curl:1-curl);
+  const t=Math.min(grabClipDuration-1e-4, k*grabClipDuration);
+  for (const sm of list){ const v=sm.interp.evaluate(t); sm.bone.quaternion.fromArray(v); }
+}
+function hand3dWorldFromScreen(nx, ny, z){
+  const d=hand3dCam.position.z - z;
+  const halfH=Math.tan(HAND3D_FOV*Math.PI/360)*d;
+  return { x:(nx*2-1)*halfH*hand3dCam.aspect, y:(1-ny*2)*halfH, halfH };
+}
+function drawHandOverlay2D(actual, sx, sy){
+  if (!actual) return;
+  const ringX=sx, ringY=sy-44;
+  virtualHandCtx.save();
+  if (handSnap?.known && (handSnap.hold||0)>0){
+    virtualHandCtx.beginPath();
+    virtualHandCtx.arc(ringX,ringY,30,-Math.PI/2,-Math.PI/2+Math.PI*2*Math.min(1,handSnap.hold));
+    virtualHandCtx.strokeStyle='#ffb347'; virtualHandCtx.lineWidth=5; virtualHandCtx.lineCap='round'; virtualHandCtx.stroke();
+    if (handSnap.icon){
+      virtualHandCtx.font='800 14px sans-serif';
+      const tw=virtualHandCtx.measureText(handSnap.icon).width;
+      virtualHandCtx.fillStyle='rgba(15,42,35,.82)';
+      virtualHandCtx.beginPath(); virtualHandCtx.roundRect(ringX-tw/2-9,ringY-56,tw+18,26,9); virtualHandCtx.fill();
+      virtualHandCtx.fillStyle='#eafff7'; virtualHandCtx.fillText(handSnap.icon,ringX-tw/2,ringY-38);
+    }
+  } else {
+    const pulse=.5+.5*Math.sin(performance.now()/280);
+    virtualHandCtx.beginPath(); virtualHandCtx.arc(ringX,ringY,7+pulse*3,0,Math.PI*2);
+    virtualHandCtx.strokeStyle=`rgba(101,205,181,${.3+pulse*.4})`; virtualHandCtx.lineWidth=2.5; virtualHandCtx.stroke();
+  }
+  virtualHandCtx.restore();
+}
+function tickHand3D(dt){
+  const hand=currentSimulationHand();
+  const tracking=!!hand;
+  restBob+=dt;
+  handPresence+=((tracking?1:.66)-handPresence)*(1-Math.exp(-dt*6));
+  let nx,ny,targetZ,targetRz;
+  if (tracking){
+    nx=hand.x/innerWidth; ny=hand.y/innerHeight;
+    targetRz=Math.max(-.6,Math.min(.45,(handTrack.angle||-.15)));
+    if (hand.actual){
+      const zn=clamp01((hand3dDepth.ratio-.72)/(1.55-.72));   // 0=멀리 1=가까이
+      targetZ=1.4+zn*3.1;                                      // 월드 z 1.4~4.5 → 원근 크기 약 3배 변화
+    } else {
+      targetZ=2.5+Math.sin(restBob*1.3)*.06;                   // 시연 모드: 중간 깊이
+    }
+  } else {
+    nx=.72; ny=.84; targetZ=2.1; targetRz=-.18+Math.sin(restBob*1.2)*.03;  // 휴식 자세
+  }
+  const kPos=1-Math.exp(-Math.max(.001,dt)*(tracking?13:4.5));
+  const kZ=1-Math.exp(-Math.max(.001,dt)*4);
+  hand3dPose.z+=(targetZ-hand3dPose.z)*kZ;
+  const w=hand3dWorldFromScreen(nx,ny,hand3dPose.z);
+  hand3dPose.x+=(w.x-hand3dPose.x)*kPos;
+  hand3dPose.y+=(w.y-hand3dPose.y)*kPos;
+  hand3dPose.rz+=(targetRz-hand3dPose.rz)*kPos;
+  const restCurl=.2;
+  for (const f of ['index','middle','ring','pinky','thumb']){
+    let tgt=restCurl;
+    if (tracking && hand.actual){
+      tgt=handTrack.curls?.[f] ?? restCurl;
+      if (hand.gesture==='Closed_Fist') tgt=Math.max(tgt,.93);
+      else if (hand.gesture==='Open_Palm') tgt=Math.min(tgt,.1);
+    } else if (tracking){
+      tgt=.16+Math.sin(restBob*1.6+'imrpt'.indexOf(f[0])*.7)*.05;   // 시연 모드 미세 꼼지락
+    }
+    const kC=1-Math.exp(-Math.max(.001,dt)*(tracking?11:3));
+    hand3dPose.curls[f]+=(tgt-hand3dPose.curls[f])*kC;
+  }
+  if (hand3dRoot){
+    hand3dRoot.position.set(hand3dPose.x,hand3dPose.y,hand3dPose.z);
+    hand3dRoot.rotation.z=HAND3D_BASE_TILT+hand3dPose.rz;
+    for (const m of hand3dMats) m.opacity=hand3dOpacity*handPresence;
+    for (const f of Object.keys(hand3dPose.curls)) applyFingerCurl(f,hand3dPose.curls[f]);
+  }
+  if (handShadow){
+    const floorY=-w.halfH*.8;
+    handShadow.position.set(hand3dPose.x,floorY,hand3dPose.z);
+    const lift=clamp01((hand3dPose.y-floorY)/(w.halfH*1.2));
+    handShadow.scale.set(2.1*(1-lift*.25),.6*(1-lift*.25),1);
+    handShadow.material.opacity=.75*(1-lift*.55)*handPresence;
+  }
+  const v=new THREE.Vector3(hand3dPose.x,hand3dPose.y,hand3dPose.z).project(hand3dCam);
+  const sx=(v.x*.5+.5)*innerWidth, sy=(-v.y*.5+.5)*innerHeight;
+  simHandDraw.speed=Math.hypot(sx-simHandDraw.x,sy-simHandDraw.y)/Math.max(.008,dt);
+  simHandDraw.x=sx; simHandDraw.y=sy;
+  simHandDraw.size=Math.max(210,Math.min(620,(handTrack.extent||260)*2.15));
+  hand3dRenderer.clear(true,true,true);
+  hand3dRenderer.render(hand3dShadowScene,hand3dCam);
+  hand3dScene.overrideMaterial=hand3dPrepass;      // 깊이 선행 패스 → 내부 겹침 제거
+  hand3dRenderer.render(hand3dScene,hand3dCam);
+  hand3dScene.overrideMaterial=null;
+  hand3dRenderer.render(hand3dScene,hand3dCam);
+  // 첫 렌더 후 실측 바운딩 재보정: ①스케일 ②중심 (스킨 변형 반영값 기준)
+  if (hand3dFixStep && hand3dSkins.length){
+    try {
+      const box=new THREE.Box3();
+      for (const m of hand3dSkins){ m.computeBoundingBox(); box.union(m.boundingBox.clone().applyMatrix4(m.matrixWorld)); }
+      if (hand3dFixStep===1){
+        const bs=box.getSize(new THREE.Vector3());
+        const maxd=Math.max(bs.x,bs.y,bs.z);
+        if (maxd>1e-3) hand3dInner.scale.multiplyScalar(1.35/maxd);
+        hand3dFixStep=2;
+      } else {
+        const c=box.getCenter(new THREE.Vector3());
+        hand3dRoot.updateMatrixWorld(true);
+        hand3dOrient.position.sub(hand3dRoot.worldToLocal(c.clone()));
+        hand3dFixStep=0;
+      }
+    } catch(e){ hand3dFixStep=0; }
+  }
+  drawHandOverlay2D(tracking && hand.actual, sx, sy);
+  const px=(sx/innerWidth-.5), py=(sy/innerHeight-.5);
+  document.body.style.setProperty('--room-x',`${(-px*7).toFixed(2)}px`);
+  document.body.style.setProperty('--room-y',`${(-py*4.5).toFixed(2)}px`);
+}
 function updateHandTrack(dt) {
   const now=performance.now();
   const snap=handSnap && now-handSnap.ts<650 ? handSnap : null;
@@ -1944,6 +2184,22 @@ function updateHandTrack(dt) {
       handTrack.prev={x:c.x,y:c.y,ts:snap.ts};
       handTrack.lastTs=snap.ts;
       handTrack.curlRaw=computeHandCurl(snap.pts);
+      handTrack.curlsRaw=fingerCurls(snap.pts);
+      // z깊이 신호: 손바닥 길이(0↔9) — 주먹을 쥐어도 불변이라 거리 오판 없음
+      const palmLen=Math.hypot(snap.pts[9].x-snap.pts[0].x,snap.pts[9].y-snap.pts[0].y)
+                    /Math.max(1,Math.min(innerWidth,innerHeight));
+      if (palmLen>.015){
+        if (!hand3dDepth.base){
+          hand3dDepth.samples.push(palmLen);
+          if (hand3dDepth.samples.length>=24){                 // 시작 후 자동 캘리브레이션 (중앙값)
+            const st=[...hand3dDepth.samples].sort((a,b)=>a-b);
+            hand3dDepth.base=st[Math.floor(st.length/2)];
+          }
+        }
+        const base=hand3dDepth.base ||
+          hand3dDepth.samples.reduce((a,b)=>a+b,0)/Math.max(1,hand3dDepth.samples.length);
+        hand3dDepth.ratio+=((palmLen/Math.max(.015,base))-hand3dDepth.ratio)*.14;  // 저역 필터
+      }
     }
     const ahead=Math.min(.12,(now-snap.ts)/1000);         // 인식 공백은 최대 120ms 속도 예측으로 메꿈
     const px=c.x+handTrack.vx*ahead*.55, py=c.y+handTrack.vy*ahead*.55;
@@ -1953,9 +2209,21 @@ function updateHandTrack(dt) {
     handTrack.extent+=(extent-handTrack.extent)*kSlow;
     handTrack.angle+=(angle-handTrack.angle)*kSlow;
     handTrack.curl+=(handTrack.curlRaw-handTrack.curl)*(1-Math.exp(-dt*12));
+    if (handTrack.curlsRaw){
+      handTrack.curls=handTrack.curls||{};
+      const kF=1-Math.exp(-dt*12);
+      for (const f in handTrack.curlsRaw){
+        const cur=handTrack.curls[f] ?? .2;
+        handTrack.curls[f]=cur+(handTrack.curlsRaw[f]-cur)*kF;
+      }
+    }
   } else {
     handTrack.vx*=.9; handTrack.vy*=.9;
     handTrack.curl+=(0-handTrack.curl)*(1-Math.exp(-dt*3));   // 이완
+    if (handTrack.curls){
+      const kR=1-Math.exp(-dt*3);
+      for (const f in handTrack.curls) handTrack.curls[f]+=(.2-handTrack.curls[f])*kR;
+    }
   }
 }
 function currentSimulationHand() {
@@ -1987,8 +2255,10 @@ function drawHandCell(cell, alpha, size) {
 }
 function renderVirtualHand(dt) {
   virtualHandCtx.clearRect(0,0,innerWidth,innerHeight);
-  if (!simExperience.started || !virtualHandReady) return;
+  if (!simExperience.started) { if (hand3dRenderer) hand3dRenderer.clear(true,true,true); return; }
   updateHandTrack(dt);
+  if (hand3dReady) { tickHand3D(dt); return; }   // 3D 손 경로 (실패 시 아래 2D 폴백)
+  if (!virtualHandReady) return;
   const hand=currentSimulationHand();
   const tracking=!!hand;
   const mobile=innerWidth<760;
@@ -2396,6 +2666,10 @@ window.__MUNG__ = {
     dogSourceFrame, motionFps:MOTION_FPS,
     expected:currentStepDef()?.expected || null, awaitingPraise,
     handVisualActive:!!(handSnap && performance.now()-handSnap.ts<900), handKnown:!!handSnap?.known,
+    hand3d:{ ready:hand3dReady, opacity:hand3dOpacity, z:Math.round(hand3dPose.z*100)/100,
+      depthRatio:Math.round(hand3dDepth.ratio*100)/100, calibrated:!!hand3dDepth.base,
+      samples:hand3dDepth.samples.length,
+      curls:Object.fromEntries(Object.entries(hand3dPose.curls).map(([k,v])=>[k,Math.round(v*100)/100])) },
     handRealtime:{ presence:Math.round(handPresence*100)/100, tracking:!!currentSimulationHand(),
       curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate, build:'v5-realtime-1' },
     simulation:{phase:simExperience.phase,state:simulationCopy().state,trust:Math.round(simExperience.trust),
