@@ -1021,8 +1021,10 @@ function renderDogMotion(track, progress, sequenceFrame) {
   dogSpriteCtx.translate(256+m.x,256+m.y);
   dogSpriteCtx.rotate(m.rot*Math.PI/180);
   dogSpriteCtx.scale(m.sx,m.sy);
+  // 원화 프레임 하드컷 제거: A컷 위에 B컷을 알파로 겹쳐 크로스페이드
   const visibleSource=m.blend<.5 ? m.srcA : m.srcB;
-  drawDogSource(visibleSource,1);
+  if (m.srcA===m.srcB || m.blend<=.004) drawDogSource(m.srcA,1);
+  else { drawDogSource(m.srcA,1); drawDogSource(m.srcB,m.blend); }
   dogSpriteCtx.restore(); dogSpriteCtx.globalAlpha=1;
   dogFrameIndex=sequenceFrame; dogSourceFrame=visibleSource;
   dogSpriteCanvas.dataset.pose = dogSpritePose;
@@ -1035,11 +1037,12 @@ function renderDogMotion(track, progress, sequenceFrame) {
 }
 function renderSimulationDog(now) {
   const frame=Math.floor((now-dogAnimStartedAt)/(1000/MOTION_FPS));
-  if (frame===dogFrameIndex) return;
   const row=simExperience.warningUntil>now ? 0 : [0,0,1,2,3][simExperience.phase];
   const cycle=[0,1,2,3,2,1];
   const f=(now-dogAnimStartedAt)/520;
-  const step=Math.floor(f)%cycle.length, blend=f-Math.floor(f);
+  const step=Math.floor(f)%cycle.length, segment=f-Math.floor(f);
+  // 앞 55%는 현재 컷 유지, 뒤 45%에서 다음 컷으로 크로스페이드 (매 프레임 연속 렌더)
+  const blend=motionEase(clamp01((segment-.55)/.45));
   const srcA=row*4+cycle[step], srcB=row*4+cycle[(step+1)%cycle.length];
   const breathe=Math.sin(now/360)*.012;
   const lean=simExperience.phase===0 || simExperience.phase===1 ? -1.2 : simExperience.phase===3 ? .7 : 0;
@@ -1048,7 +1051,8 @@ function renderSimulationDog(now) {
   dogSpriteCtx.rotate((lean+Math.sin(now/700)*.35)*Math.PI/180);
   dogSpriteCtx.scale(1+breathe,1-breathe*.45);
   const visibleSource=blend<.5?srcA:srcB;
-  drawDogSource(visibleSource,1);
+  if (srcA===srcB || blend<=.004) drawDogSource(srcA,1);
+  else { drawDogSource(srcA,1); drawDogSource(srcB,blend); }
   dogSpriteCtx.restore(); dogSpriteCtx.globalAlpha=1;
   dogFrameIndex=frame; dogSourceFrame=visibleSource;
   dogSpriteCanvas.dataset.pose=['guarded','guarded','softening','approach','trust'][simExperience.phase];
@@ -1064,8 +1068,9 @@ function tickDogSprite(now) {
   const elapsed=Math.max(0,now-dogAnimStartedAt), totalFrames=Math.max(2,Math.round(track.duration/1000*MOTION_FPS));
   const absoluteFrame=Math.floor(elapsed/(1000/MOTION_FPS));
   const sequenceFrame=track.loop ? absoluteFrame%totalFrames : Math.min(totalFrames-1,absoluteFrame);
-  if (sequenceFrame===dogFrameIndex) return;
-  const progress=sequenceFrame/(totalFrames-1);
+  // 30fps 스텝 양자화 제거: 매 rAF 프레임 연속 진행률로 렌더 (트랜스폼·블렌드가 60fps로 이어짐)
+  const rawProgress=elapsed/track.duration;
+  const progress=track.loop ? rawProgress%1 : Math.min(1,rawProgress);
   renderDogMotion(track,progress,sequenceFrame);
 }
 function setDogSpritePose(pose, feedback='') {
@@ -1810,21 +1815,27 @@ const GESTURE_MAP = { Open_Palm:'stay', Pointing_Up:'sit', Closed_Fist:'down', V
 const GESTURE_KO  = { Open_Palm:'기다려', Pointing_Up:'앉아', Closed_Fist:'엎드려', Victory:'손', Thumb_Up:'칭찬' };
 const HAND_LINKS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],
                     [9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
-let gestureRec = null, faceDet = null;
+let gestureRec = null, faceDet = null, visionDelegate = '';
 let handSnap = null, holdName = null, holdStart = 0, lastFired = '', lastFiredAt = 0, ringFx = null, lastHandSeen = 0;
 (async () => {
   try {
     const fs = await FilesetResolver.forVisionTasks(
       'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
-    gestureRec = await GestureRecognizer.createFromOptions(fs, {
+    // GPU 추론 우선 시도 → 미지원 기기는 CPU 자동 폴백 (추론 시간 단축 = 히치 제거)
+    const makeGesture = delegate => GestureRecognizer.createFromOptions(fs, {
       baseOptions: { modelAssetPath:
-        'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task' },
+        'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task',
+        delegate },
       runningMode: 'VIDEO', numHands: 1 });
+    try { gestureRec = await makeGesture('GPU'); visionDelegate='GPU'; }
+    catch(e) { gestureRec = await makeGesture('CPU'); visionDelegate='CPU'; }
     dot('dHand', true);
-    faceDet = await FaceDetector.createFromOptions(fs, {
+    const makeFace = delegate => FaceDetector.createFromOptions(fs, {
       baseOptions: { modelAssetPath:
-        'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite' },
+        'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
+        delegate },
       runningMode: 'VIDEO' });
+    try { faceDet = await makeFace('GPU'); } catch(e) { faceDet = await makeFace('CPU'); }
     dot('dFace', true);
   } catch(e) { toast('손짓 인식 로드 실패 — 인터넷 확인'); }
 })();
@@ -1854,7 +1865,7 @@ function tickHandDebug(t) {
             icon:'기다려',gesture:'Open_Palm',hold:(Math.sin(t/600)+1)/2,ts:performance.now(),debug:true};
 }
 let frameNo = 0;
-const gEvery = isMobile ? 3 : 2, fEvery = isMobile ? 5 : 3;
+const gEvery = isMobile ? 3 : 2, fEvery = isMobile ? 8 : 6;   // 얼굴은 접근속도 판정용이라 10Hz면 충분
 function tickVision(t) {
   if (!videoReady) return;
   frameNo++;
@@ -1897,16 +1908,63 @@ function tickVision(t) {
   }
 }
 
-/* ─────────── 2.5D 손·거리·교감 시뮬레이션 ─────────── */
+/* ─────────── 2.5D 상시 손 · 실시간 추종 시스템 ───────────
+   인식(15~30Hz) 스냅샷을 매 rAF(60fps)에서 보간·속도예측·스무딩해 1인칭 손이
+   항상 떠 있게 한다. 손이 안 잡히면 우하단 휴식 자세로 이완하고, 잡히는 순간
+   들어올려져 실좌표를 따라온다. 손가락 굽힘(curl)은 랜드마크 비율에서 연속값으로
+   추정해 보자기~오므림 컷을 모핑한다. 랜드마크 원본은 저장하지 않는다. */
+const HAND_CELLS = { spread:0, reach:1, pet:2, cup:3 };
+const handTrack = { lastTs:0, x:0, y:0, extent:0, angle:-.16, vx:0, vy:0,
+                    curl:0, curlRaw:0, prev:null };
+let handPresence = 0, restBob = 0;
+function computeHandCurl(pts) {
+  // 손목(0)→손끝 거리 / 손목→기저관절 거리 비율로 굽힘 추정 (폄 ≈1.6~2.0 · 주먹 ≈0.7~1.0)
+  const wrist=pts[0], dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+  let sum=0,n=0;
+  for (const [mcp,tip] of [[5,8],[9,12],[13,16],[17,20]]) {
+    const base=dist(wrist,pts[mcp]); if (base<1) continue;
+    sum+=clamp01((1.75-dist(wrist,pts[tip])/base)/.85); n++;
+  }
+  return n?sum/n:0;
+}
+function updateHandTrack(dt) {
+  const now=performance.now();
+  const snap=handSnap && now-handSnap.ts<650 ? handSnap : null;
+  if (snap) {
+    const c=handCenter();
+    const xs=snap.pts.map(p=>p.x), ys=snap.pts.map(p=>p.y);
+    const extent=Math.max(Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys));
+    const wrist=snap.pts[0], middle=snap.pts[9] || c;
+    const angle=Math.atan2(middle.y-wrist.y,middle.x-wrist.x)+Math.PI/2;
+    if (snap.ts!==handTrack.lastTs) {                     // 새 인식 프레임 → 속도 갱신
+      if (handTrack.prev) {
+        const dts=Math.max(.012,(snap.ts-handTrack.prev.ts)/1000);
+        handTrack.vx=(c.x-handTrack.prev.x)/dts; handTrack.vy=(c.y-handTrack.prev.y)/dts;
+      }
+      handTrack.prev={x:c.x,y:c.y,ts:snap.ts};
+      handTrack.lastTs=snap.ts;
+      handTrack.curlRaw=computeHandCurl(snap.pts);
+    }
+    const ahead=Math.min(.12,(now-snap.ts)/1000);         // 인식 공백은 최대 120ms 속도 예측으로 메꿈
+    const px=c.x+handTrack.vx*ahead*.55, py=c.y+handTrack.vy*ahead*.55;
+    const kPos=1-Math.exp(-dt*16), kSlow=1-Math.exp(-dt*10);
+    handTrack.x=handTrack.x?handTrack.x+(px-handTrack.x)*kPos:px;
+    handTrack.y=handTrack.y?handTrack.y+(py-handTrack.y)*kPos:py;
+    handTrack.extent+=(extent-handTrack.extent)*kSlow;
+    handTrack.angle+=(angle-handTrack.angle)*kSlow;
+    handTrack.curl+=(handTrack.curlRaw-handTrack.curl)*(1-Math.exp(-dt*12));
+  } else {
+    handTrack.vx*=.9; handTrack.vy*=.9;
+    handTrack.curl+=(0-handTrack.curl)*(1-Math.exp(-dt*3));   // 이완
+  }
+}
 function currentSimulationHand() {
   const now=performance.now();
   if (handSnap && now-handSnap.ts<650) {
-    const xs=handSnap.pts.map(p=>p.x), ys=handSnap.pts.map(p=>p.y);
-    const center=handCenter();
-    const extent=Math.max(Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys));
-    const wrist=handSnap.pts[0], middle=handSnap.pts[9] || center;
-    return { x:center.x,y:center.y,size:Math.max(210,Math.min(620,extent*2.15)),
-      angle:Math.atan2(middle.y-wrist.y,middle.x-wrist.x)+Math.PI/2,
+    const x=handTrack.x||innerWidth*.5, y=handTrack.y||innerHeight*.58;
+    const extent=handTrack.extent||220;
+    return { x, y, size:Math.max(210,Math.min(620,extent*2.15)),
+      angle:handTrack.angle,
       open:handSnap.gesture==='Open_Palm',gesture:handSnap.gesture,actual:true,extent };
   }
   if (simExperience.manual && simManualHand.active) {
@@ -1916,48 +1974,113 @@ function currentSimulationHand() {
   }
   return null;
 }
-function renderVirtualHand(dt) {
-  virtualHandCtx.clearRect(0,0,innerWidth,innerHeight);
-  if (!simExperience.started || !virtualHandReady) return;
-  const hand=currentSimulationHand();
-  if (!hand) return;
-  const mobile=innerWidth<760;
-  const perspectiveSize=mobile
-    ? Math.min(innerHeight*.72,innerWidth*1.22)
-    : Math.min(innerHeight*.9,innerWidth*.58);
-  const targetSize=Math.max(hand.size,perspectiveSize);
-  const targetX=innerWidth-targetSize*(mobile ? .38 : .5)+8+(hand.x/innerWidth-.5)*(mobile ? 26 : 54);
-  const targetY=innerHeight-targetSize*(mobile ? .27 : .5)+10+(hand.y/innerHeight-.6)*(mobile ? 22 : 42);
-  const ease=1-Math.exp(-Math.max(.001,dt)*9);
-  const previousX=simHandDraw.x, previousY=simHandDraw.y;
-  simHandDraw.x+=(targetX-simHandDraw.x)*ease;
-  simHandDraw.y+=(targetY-simHandDraw.y)*ease;
-  simHandDraw.size+=(targetSize-simHandDraw.size)*ease;
-  simHandDraw.angle+=(Math.max(-.28,Math.min(.16,hand.angle)) -simHandDraw.angle)*ease;
-  simHandDraw.speed=Math.hypot(simHandDraw.x-previousX,simHandDraw.y-previousY)/Math.max(.008,dt);
-  const phase=simExperience.phase;
-  const cell=phase>=4?3:phase===3?(simExperience.petHold>.28?3:2):phase===2?1:0;
+function drawHandCell(cell, alpha, size) {
+  if (alpha<=0.004) return;
   const col=cell%2,row=Math.floor(cell/2),pad=6;
   const sx=Math.round(col*virtualHandImg.naturalWidth/2)+pad;
   const sy=Math.round(row*virtualHandImg.naturalHeight/2)+pad;
   const x1=Math.round((col+1)*virtualHandImg.naturalWidth/2)-pad;
   const y1=Math.round((row+1)*virtualHandImg.naturalHeight/2)-pad;
-  const sw=x1-sx, sh=y1-sy;
-  const drawSize=simHandDraw.size*(phase>=3?1.12:1);
+  virtualHandCtx.globalAlpha=Math.max(0,Math.min(1,alpha));
+  // 손목이 화면 밖 피벗에 닿도록 하단 중앙 기준으로 그린다 (팔 절단면 노출 방지)
+  virtualHandCtx.drawImage(virtualHandImg,sx,sy,x1-sx,y1-sy,-size*.5,-size,size,size);
+}
+function renderVirtualHand(dt) {
+  virtualHandCtx.clearRect(0,0,innerWidth,innerHeight);
+  if (!simExperience.started || !virtualHandReady) return;
+  updateHandTrack(dt);
+  const hand=currentSimulationHand();
+  const tracking=!!hand;
+  const mobile=innerWidth<760;
+  restBob+=dt;
+  // 존재감: 추적 중 100% · 놓치면 휴식 자세 66% — 손이 화면에서 사라지지 않는다
+  handPresence+=((tracking?1:.66)-handPresence)*(1-Math.exp(-dt*6));
+  const perspectiveSize=mobile
+    ? Math.min(innerHeight*.78,innerWidth*1.22)
+    : Math.min(innerHeight*.96,innerWidth*.6);
+  // 팔은 화면 아래 피벗에서 나와 손끝이 실제 손 좌표를 향한다 (FPS식 · 절단면 없음)
+  const pivotX=innerWidth*(mobile?.72:.78), pivotY=innerHeight*1.08;
+  let targetAngle, targetSize;
+  if (tracking) {
+    const dx=hand.x-pivotX, dy=hand.y-pivotY, dist=Math.hypot(dx,dy);
+    targetAngle=Math.max(-1.05,Math.min(.4,Math.atan2(dy,dx)+Math.PI/2));
+    const depth=clamp01(((hand.extent||220)-140)/460);           // 카메라와의 거리 → 뻗는 정도
+    targetSize=Math.max(perspectiveSize*.55,Math.min(perspectiveSize*1.24,dist/0.92))*(.88+depth*.2);
+  } else {
+    targetAngle=-.18+Math.sin(restBob*1.2)*.022;                 // 휴식 자세 미세 호흡
+    targetSize=perspectiveSize*.6+Math.sin(restBob*1.7)*5;
+  }
+  const ease=1-Math.exp(-Math.max(.001,dt)*(tracking?13:4.5));
+  simHandDraw.angle+=(targetAngle-simHandDraw.angle)*ease;
+  simHandDraw.size+=(targetSize-simHandDraw.size)*ease;
+  const phase=simExperience.phase;
+  const drawSize=simHandDraw.size*(phase>=3?1.1:1);
+  // 손끝 위치(피벗 기준 회전 결과) — 속도·그림자·링·시차의 기준점
+  const tipX=pivotX+Math.sin(simHandDraw.angle)*drawSize*.92;
+  const tipY=pivotY-Math.cos(simHandDraw.angle)*drawSize*.92;
+  const previousX=simHandDraw.x, previousY=simHandDraw.y;
+  simHandDraw.x=tipX; simHandDraw.y=tipY;
+  simHandDraw.speed=Math.hypot(tipX-previousX,tipY-previousY)/Math.max(.008,dt);
+  // 손가락 굽힘(curl) 모핑: 랜드마크 연속값 + 확정 제스처 스냅
+  let curl=handTrack.curl;
+  if (tracking && hand.actual) {
+    if (hand.gesture==='Closed_Fist') curl=Math.max(curl,.95);
+    else if (hand.gesture==='Open_Palm') curl=Math.min(curl,.12);
+  }
+  const baseCell=phase>=4?HAND_CELLS.cup:phase===3?(simExperience.petHold>.28?HAND_CELLS.cup:HAND_CELLS.pet):phase===2?HAND_CELLS.reach:HAND_CELLS.spread;
+  const cupBlend=baseCell===HAND_CELLS.cup?0:motionEase(clamp01((curl-.14)/.66));
+  // 바닥 그림자: 손 높이에 따라 크기·농도 변화 (2.5D 공간감)
+  const floorY=innerHeight*(mobile?.9:.875);
+  const lift=clamp01((floorY-tipY)/(innerHeight*.55));
   virtualHandCtx.save();
-  virtualHandCtx.translate(simHandDraw.x,simHandDraw.y);
-  virtualHandCtx.rotate(simHandDraw.angle);
+  virtualHandCtx.globalAlpha=handPresence*.34*(1-lift*.6);
+  const shW=Math.max(30,drawSize*(.28-lift*.09));
+  const sg=virtualHandCtx.createRadialGradient(tipX,floorY,shW*.1,tipX,floorY,shW);
+  sg.addColorStop(0,'rgba(38,78,66,.85)'); sg.addColorStop(1,'rgba(38,78,66,0)');
+  virtualHandCtx.fillStyle=sg;
+  virtualHandCtx.beginPath();
+  virtualHandCtx.ellipse(tipX,floorY,shW,Math.max(7,shW*.2),0,0,Math.PI*2); virtualHandCtx.fill();
+  virtualHandCtx.restore();
+  // 손 본체: 피벗 회전 + 기본 컷 위에 오므림 컷 크로스 모핑
+  virtualHandCtx.save();
+  virtualHandCtx.translate(pivotX,pivotY);
+  virtualHandCtx.rotate(simHandDraw.angle+Math.max(-.05,Math.min(.05,simHandDraw.speed*.000018)));
+  virtualHandCtx.scale(1,1-cupBlend*.05);                        // 굽히면 살짝 짧아짐
   virtualHandCtx.shadowColor='rgba(36,96,80,.24)'; virtualHandCtx.shadowBlur=24;
-  virtualHandCtx.drawImage(virtualHandImg,sx,sy,sw,sh,-drawSize*.5,-drawSize*.56,drawSize,drawSize);
-  virtualHandCtx.shadowBlur=0;
+  drawHandCell(baseCell,handPresence*(1-cupBlend*.85),drawSize);
+  if (cupBlend>0.004) drawHandCell(HAND_CELLS.cup,handPresence*cupBlend,drawSize);
+  virtualHandCtx.shadowBlur=0; virtualHandCtx.globalAlpha=1;
   virtualHandCtx.globalCompositeOperation='destination-over';
-  const glow=virtualHandCtx.createRadialGradient(0,0,drawSize*.06,0,0,drawSize*.42);
-  glow.addColorStop(0,'rgba(101,205,181,.18)'); glow.addColorStop(1,'rgba(101,205,181,0)');
-  virtualHandCtx.fillStyle=glow; virtualHandCtx.beginPath(); virtualHandCtx.arc(0,0,drawSize*.43,0,Math.PI*2); virtualHandCtx.fill();
+  const glow=virtualHandCtx.createRadialGradient(0,-drawSize*.5,drawSize*.06,0,-drawSize*.5,drawSize*.46);
+  glow.addColorStop(0,`rgba(101,205,181,${tracking?.22:.12})`); glow.addColorStop(1,'rgba(101,205,181,0)');
+  virtualHandCtx.fillStyle=glow;
+  virtualHandCtx.beginPath(); virtualHandCtx.arc(0,-drawSize*.5,drawSize*.47,0,Math.PI*2); virtualHandCtx.fill();
   virtualHandCtx.restore(); virtualHandCtx.globalCompositeOperation='source-over';
-  const px=(simHandDraw.x/innerWidth-.5), py=(simHandDraw.y/innerHeight-.5);
-  document.body.style.setProperty('--room-x',`${(-px*5).toFixed(2)}px`);
-  document.body.style.setProperty('--room-y',`${(-py*3).toFixed(2)}px`);
+  // 인식 피드백: 제스처 홀드 진행 링 + 추적 펄스
+  if (tracking && hand.actual) {
+    const ringX=tipX, ringY=tipY-26;
+    virtualHandCtx.save();
+    if (handSnap?.known && (handSnap.hold||0)>0) {
+      virtualHandCtx.beginPath();
+      virtualHandCtx.arc(ringX,ringY,30,-Math.PI/2,-Math.PI/2+Math.PI*2*Math.min(1,handSnap.hold));
+      virtualHandCtx.strokeStyle='#ffb347'; virtualHandCtx.lineWidth=5; virtualHandCtx.lineCap='round'; virtualHandCtx.stroke();
+      if (handSnap.icon) {
+        virtualHandCtx.font='800 14px sans-serif';
+        const tw=virtualHandCtx.measureText(handSnap.icon).width;
+        virtualHandCtx.fillStyle='rgba(15,42,35,.82)';
+        virtualHandCtx.beginPath(); virtualHandCtx.roundRect(ringX-tw/2-9,ringY-56,tw+18,26,9); virtualHandCtx.fill();
+        virtualHandCtx.fillStyle='#eafff7'; virtualHandCtx.fillText(handSnap.icon,ringX-tw/2,ringY-38);
+      }
+    } else {
+      const pulse=.5+.5*Math.sin(performance.now()/280);
+      virtualHandCtx.beginPath(); virtualHandCtx.arc(ringX,ringY,7+pulse*3,0,Math.PI*2);
+      virtualHandCtx.strokeStyle=`rgba(101,205,181,${.3+pulse*.4})`; virtualHandCtx.lineWidth=2.5; virtualHandCtx.stroke();
+    }
+    virtualHandCtx.restore();
+  }
+  const px=(tipX/innerWidth-.5), py=(tipY/innerHeight-.5);
+  document.body.style.setProperty('--room-x',`${(-px*7).toFixed(2)}px`);
+  document.body.style.setProperty('--room-y',`${(-py*4.5).toFixed(2)}px`);
 }
 function tickSimulation(t,dt) {
   if (!simExperience.started) return;
@@ -2273,6 +2396,8 @@ window.__MUNG__ = {
     dogSourceFrame, motionFps:MOTION_FPS,
     expected:currentStepDef()?.expected || null, awaitingPraise,
     handVisualActive:!!(handSnap && performance.now()-handSnap.ts<900), handKnown:!!handSnap?.known,
+    handRealtime:{ presence:Math.round(handPresence*100)/100, tracking:!!currentSimulationHand(),
+      curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate, build:'v5-realtime-1' },
     simulation:{phase:simExperience.phase,state:simulationCopy().state,trust:Math.round(simExperience.trust),
       completed:simExperience.completed,manual:simExperience.manual,handVisible:!!currentSimulationHand(),cameraVisible:false},
     online:navigator.onLine, fps:fpsNow, webglReady, eventCount:eventLog.length
