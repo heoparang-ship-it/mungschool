@@ -2136,7 +2136,8 @@ function tickHand3D(dt){
     if (hand.actual){
       // ★창문 모델: 실제 손이 화면(카메라)에 다가갈수록 화면 속 손은 장면 깊숙이 들어가
       // 치와와의 깊이로 수렴한다. (뒤로 빼면 창문 앞 = 크게, 뻗으면 강아지 곁 = 강아지 스케일)
-      const zn=hand3dDepth.ratio;                              // 0=몸쪽 1=화면 앞
+      // 중앙 기준 1.45배 증폭: 작은 앞뒤 움직임으로도 전체 깊이 범위를 오간다 (감도↑)
+      const zn=clamp01(.5+(hand3dDepth.ratio-.5)*1.45);        // 0=몸쪽 1=화면 앞
       targetZ=3.5-zn*2.7;                                      // 월드 z 3.5(창문 앞)→0.8(강아지 깊이)
       // 리치 마그넷: 깊이 들어갈수록 화면 위치도 강아지 쪽으로 살짝 수렴 → "다가간다"가 읽힘
       const dp=dogScreenPos();
@@ -2153,7 +2154,7 @@ function tickHand3D(dt){
     nx=.72; ny=.84; targetZ=2.1; targetRz=-.18+Math.sin(restBob*1.2)*.03;  // 휴식 자세
   }
   const kPos=1-Math.exp(-Math.max(.001,dt)*(tracking?13:4.5));
-  const kZ=1-Math.exp(-Math.max(.001,dt)*6.5);   // z 반응 가속
+  const kZ=1-Math.exp(-Math.max(.001,dt)*9);     // z 반응 가속 (감도↑)
   hand3dPose.z+=(targetZ-hand3dPose.z)*kZ;
   const w=hand3dWorldFromScreen(nx,ny,hand3dPose.z);
   hand3dPose.x+=(w.x-hand3dPose.x)*kPos;
@@ -2257,7 +2258,7 @@ function updateHandTrack(dt) {
         const zn=span>=HAND3D_DEPTH_MIN_SPAN
           ? clamp01((palmLen-hand3dDepth.min)/span)            // 0=최대 멀리 · 1=최대 가까이
           : .5;                                                 // 범위 학습 전엔 중립 깊이
-        hand3dDepth.ratio+=(zn-hand3dDepth.ratio)*.3;           // 저역 필터
+        hand3dDepth.ratio+=(zn-hand3dDepth.ratio)*.45;          // 저역 필터 (감도↑)
       }
     }
     const ahead=Math.min(.12,(now-snap.ts)/1000);         // 인식 공백은 최대 120ms 속도 예측으로 메꿈
@@ -2733,7 +2734,7 @@ window.__MUNG__ = {
       yawDeg:Math.round(new THREE.Euler().setFromQuaternion(hand3dQDev,'YXZ').y*180/Math.PI),
       curls:Object.fromEntries(Object.entries(hand3dPose.curls).map(([k,v])=>[k,Math.round(v*100)/100])) },
     handRealtime:{ presence:Math.round(handPresence*100)/100, tracking:!!currentSimulationHand(),
-      curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate, build:'v6-3dhand-5' },
+      curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate, build:'v6-3dhand-6' },
     simulation:{phase:simExperience.phase,state:simulationCopy().state,trust:Math.round(simExperience.trust),
       completed:simExperience.completed,manual:simExperience.manual,handVisible:!!currentSimulationHand(),cameraVisible:false},
     online:navigator.onLine, fps:fpsNow, webglReady, eventCount:eventLog.length
