@@ -1872,7 +1872,10 @@ function tickHandDebug(t) {
     [.13,.05],[.18,-.17],[.2,-.38],[.21,-.57],
     [.24,.15],[.34,-.02],[.4,-.2],[.44,-.37]
   ];
+  const yaw=Math.sin(t/2600)*.9;   // 손날→뒤집기 방향 회전 스윙 (3D 자세 회귀검증)
   handSnap={pts:offsets.map(([x,y])=>({x:cx+x*s,y:cy+y*s})),known:true,score:.96,
+            pts3:offsets.map(([x,y])=>({x:.5+Math.cos(yaw)*x*.08, y:.55+y*.08, z:-Math.sin(yaw)*x*.08})),
+            handed:'',
             icon:'기다려',gesture:'Open_Palm',hold:(Math.sin(t/600)+1)/2,ts:performance.now(),debug:true};
 }
 let frameNo = 0;
@@ -1887,6 +1890,9 @@ function tickVision(t) {
     const known = !!(g && GESTURE_MAP[g.categoryName] && g.score > 0.6);
     if (lm) {
       handSnap = { pts: lm.map(p => videoToScreen(p.x, p.y)),
+                   // 3D 자세용 원시 좌표: 미러 보정 x + MediaPipe 상대 깊이 z (저장하지 않음)
+                   pts3: lm.map(p => ({ x: mirrored ? 1-p.x : p.x, y: p.y, z: p.z || 0 })),
+                   handed: res.handedness?.[0]?.[0]?.categoryName || '',
                    icon: known ? GESTURE_KO[g.categoryName] : '',
                    gesture:g?.categoryName || '', known, score: g ? g.score : 0, ts: performance.now() };
       lastHandSeen = performance.now();
@@ -1978,6 +1984,32 @@ const hand3dPose = { x:0, y:-1, z:2.4, rz:-.15, curls:{index:.22,middle:.22,ring
 // "가까이=크게 · 멀리=작게"가 항상 성립. zn은 범위가 충분히 벌어지기 전까지 중립(.5).
 const hand3dDepth = { samples:[], base:0, ratio:.5, min:null, max:null };
 const HAND3D_DEPTH_MIN_SPAN = .04;
+// ─── 손 3D 자세 (손날·손등↔손바닥 뒤집기 인식) ───
+// 랜드마크의 미러보정 x·y + MediaPipe 상대 z로 손 기저(위·가로·법선)를 만들어
+// '손가락 위 + 손바닥이 카메라를 향한 중립 자세' 대비 회전 편차 쿼터니언을 구한다.
+const HAND3D_FLIP_FOR = 'Right';          // 가로축 반전 기준 손 (거울상이 반대면 'Left'로)
+const hand3dQDev = new THREE.Quaternion();
+const _hq = { m:new THREE.Matrix4(), q:new THREE.Quaternion(), e:new THREE.Euler(), id:new THREE.Quaternion() };
+function handOrientTarget(qOut){
+  const snap=handSnap;
+  if (!snap || !snap.pts3 || performance.now()-snap.ts>650) return false;
+  const P=snap.pts3;
+  const W=i=>new THREE.Vector3(P[i].x, -P[i].y, -(P[i].z||0));
+  const w0=W(0);
+  const u=W(9).sub(w0);                              // 손목→중지 기저 = 손의 세로축
+  const v=W(5).sub(W(17));                           // 새끼→검지 = 손의 가로축
+  if ((snap.handed||'')===HAND3D_FLIP_FOR) v.negate();
+  if (u.lengthSq()<1e-8 || v.lengthSq()<1e-8) return false;
+  u.normalize();
+  const n=new THREE.Vector3().crossVectors(u,v);     // 손바닥 법선 (중립=카메라 방향 +z)
+  if (n.lengthSq()<1e-8) return false;
+  n.normalize();
+  u.sub(n.clone().multiplyScalar(u.dot(n))).normalize();   // u ⟂ n 직교화
+  const r=new THREE.Vector3().crossVectors(u,n);     // 오른손계 가로축
+  _hq.m.makeBasis(r,u,n);
+  qOut.setFromRotationMatrix(_hq.m);
+  return true;
+}
 try {
   hand3dRenderer = new THREE.WebGLRenderer({ canvas:$('hand3d'), alpha:true, antialias:true });
   hand3dRenderer.setPixelRatio(Math.min(devicePixelRatio,2));
@@ -2102,8 +2134,15 @@ function tickHand3D(dt){
     nx=hand.x/innerWidth; ny=hand.y/innerHeight;
     targetRz=Math.max(-.6,Math.min(.45,(handTrack.angle||-.15)));
     if (hand.actual){
-      // 적응형 zn(0=멀리·1=가까이) → 카메라 앞뒤 실이동. 상한은 강아지를 다 덮지 않는 선까지.
-      targetZ=1.3+hand3dDepth.ratio*3.1;                       // 월드 z 1.3~4.4
+      // ★창문 모델: 실제 손이 화면(카메라)에 다가갈수록 화면 속 손은 장면 깊숙이 들어가
+      // 치와와의 깊이로 수렴한다. (뒤로 빼면 창문 앞 = 크게, 뻗으면 강아지 곁 = 강아지 스케일)
+      const zn=hand3dDepth.ratio;                              // 0=몸쪽 1=화면 앞
+      targetZ=3.5-zn*2.7;                                      // 월드 z 3.5(창문 앞)→0.8(강아지 깊이)
+      // 리치 마그넷: 깊이 들어갈수록 화면 위치도 강아지 쪽으로 살짝 수렴 → "다가간다"가 읽힘
+      const dp=dogScreenPos();
+      const magnet=clamp01((zn-.55)/.45)*.35;
+      nx+=(dp.x/innerWidth-nx)*magnet;
+      ny+=(dp.y/innerHeight-ny)*magnet;
     } else {
       targetZ=2.5+Math.sin(restBob*1.3)*.06;                   // 시연 모드: 중간 깊이
     }
@@ -2120,6 +2159,9 @@ function tickHand3D(dt){
   hand3dPose.x+=(w.x-hand3dPose.x)*kPos;
   hand3dPose.y+=(w.y-hand3dPose.y)*kPos;
   hand3dPose.rz+=(targetRz-hand3dPose.rz)*kPos;
+  // 3D 자세: 실추적 중엔 랜드마크 기저로 손날·뒤집기까지 반영, 놓치면 동결, 휴식 땐 중립 복귀
+  if (tracking && hand.actual && handOrientTarget(_hq.q)) hand3dQDev.slerp(_hq.q, 1-Math.exp(-dt*9));
+  else if (!holding && !(tracking&&hand.actual)) hand3dQDev.slerp(_hq.id, 1-Math.exp(-dt*2.5));
   const restCurl=.2;
   for (const f of ['index','middle','ring','pinky','thumb']){
     let tgt=restCurl;
@@ -2135,7 +2177,10 @@ function tickHand3D(dt){
   }
   if (hand3dRoot){
     hand3dRoot.position.set(hand3dPose.x,hand3dPose.y,hand3dPose.z);
-    hand3dRoot.rotation.z=HAND3D_BASE_TILT+hand3dPose.rz;
+    // 기본 기울기(뷰 공간) 위에 3D 자세 편차를 얹는다. 실추적 중 롤은 편차가 담당.
+    const rollExtra=(tracking&&hand.actual)?0:hand3dPose.rz;
+    _hq.e.set(0,0,HAND3D_BASE_TILT+rollExtra);
+    hand3dRoot.quaternion.setFromEuler(_hq.e).premultiply(hand3dQDev);
     for (const m of hand3dMats) m.opacity=hand3dOpacity*handPresence;
     for (const f of Object.keys(hand3dPose.curls)) applyFingerCurl(f,hand3dPose.curls[f]);
   }
@@ -2685,9 +2730,10 @@ window.__MUNG__ = {
       depthRatio:Math.round(hand3dDepth.ratio*100)/100,
       calibrated:(hand3dDepth.max-hand3dDepth.min)>=HAND3D_DEPTH_MIN_SPAN,
       depthSpan:Math.round(((hand3dDepth.max||0)-(hand3dDepth.min||0))*1000)/1000,
+      yawDeg:Math.round(new THREE.Euler().setFromQuaternion(hand3dQDev,'YXZ').y*180/Math.PI),
       curls:Object.fromEntries(Object.entries(hand3dPose.curls).map(([k,v])=>[k,Math.round(v*100)/100])) },
     handRealtime:{ presence:Math.round(handPresence*100)/100, tracking:!!currentSimulationHand(),
-      curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate, build:'v6-3dhand-3' },
+      curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate, build:'v6-3dhand-4' },
     simulation:{phase:simExperience.phase,state:simulationCopy().state,trust:Math.round(simExperience.trust),
       completed:simExperience.completed,manual:simExperience.manual,handVisible:!!currentSimulationHand(),cameraVisible:false},
     online:navigator.onLine, fps:fpsNow, webglReady, eventCount:eventLog.length
