@@ -1987,7 +1987,7 @@ const HAND3D_DEPTH_MIN_SPAN = .04;
 // ─── 손 3D 자세 (손날·손등↔손바닥 뒤집기 인식) ───
 // 랜드마크의 미러보정 x·y + MediaPipe 상대 z로 손 기저(위·가로·법선)를 만들어
 // '손가락 위 + 손바닥이 카메라를 향한 중립 자세' 대비 회전 편차 쿼터니언을 구한다.
-const HAND3D_FLIP_FOR = 'Right';          // 가로축 반전 기준 손 (거울상이 반대면 'Left'로)
+const HAND3D_FLIP_FOR = 'Left';           // 가로축 반전 기준 손 (실사용 확인으로 확정: 2026-07-23)
 const hand3dQDev = new THREE.Quaternion();
 const _hq = { m:new THREE.Matrix4(), q:new THREE.Quaternion(), e:new THREE.Euler(), id:new THREE.Quaternion() };
 function handOrientTarget(qOut){
@@ -2733,7 +2733,7 @@ window.__MUNG__ = {
       yawDeg:Math.round(new THREE.Euler().setFromQuaternion(hand3dQDev,'YXZ').y*180/Math.PI),
       curls:Object.fromEntries(Object.entries(hand3dPose.curls).map(([k,v])=>[k,Math.round(v*100)/100])) },
     handRealtime:{ presence:Math.round(handPresence*100)/100, tracking:!!currentSimulationHand(),
-      curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate, build:'v6-3dhand-4' },
+      curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate, build:'v6-3dhand-5' },
     simulation:{phase:simExperience.phase,state:simulationCopy().state,trust:Math.round(simExperience.trust),
       completed:simExperience.completed,manual:simExperience.manual,handVisible:!!currentSimulationHand(),cameraVisible:false},
     online:navigator.onLine, fps:fpsNow, webglReady, eventCount:eventLog.length
