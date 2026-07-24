@@ -1989,6 +1989,7 @@ const HAND3D_DEPTH_MIN_SPAN = .04;
 // '손가락 위 + 손바닥이 카메라를 향한 중립 자세' 대비 회전 편차 쿼터니언을 구한다.
 const HAND3D_FLIP_FOR = 'Left';           // 가로축 반전 기준 손 (실사용 확인으로 확정: 2026-07-23)
 const hand3dQDev = new THREE.Quaternion();
+let hand3dContact=false, hand3dTouchFxAt=0;   // 강아지 접촉 상태 · 촉감 피드백 쿨다운
 const _hq = { m:new THREE.Matrix4(), q:new THREE.Quaternion(), e:new THREE.Euler(), id:new THREE.Quaternion() };
 function handOrientTarget(qOut){
   const snap=handSnap;
@@ -2134,16 +2135,28 @@ function tickHand3D(dt){
     nx=hand.x/innerWidth; ny=hand.y/innerHeight;
     targetRz=Math.max(-.6,Math.min(.45,(handTrack.angle||-.15)));
     if (hand.actual){
-      // ★창문 모델: 실제 손이 화면(카메라)에 다가갈수록 화면 속 손은 장면 깊숙이 들어가
-      // 치와와의 깊이로 수렴한다. (뒤로 빼면 창문 앞 = 크게, 뻗으면 강아지 곁 = 강아지 스케일)
-      // 중앙 기준 1.45배 증폭: 작은 앞뒤 움직임으로도 전체 깊이 범위를 오간다 (감도↑)
-      const zn=clamp01(.5+(hand3dDepth.ratio-.5)*1.45);        // 0=몸쪽 1=화면 앞
-      targetZ=3.5-zn*2.7;                                      // 월드 z 3.5(창문 앞)→0.8(강아지 깊이)
-      // 리치 마그넷: 깊이 들어갈수록 화면 위치도 강아지 쪽으로 살짝 수렴 → "다가간다"가 읽힘
+      // ★창문 모델: 실제 손이 화면에 다가갈수록 화면 속 손은 장면 깊숙이 들어가 치와와에게 간다.
+      const znRaw=clamp01(.5+(hand3dDepth.ratio-.5)*1.45);     // 0=몸쪽 1=화면 앞 (중앙 증폭)
+      // 비선형 커브: 멀리선 빠르게 이동, 강아지 근처에선 미세 제어 (만지기 직전 정밀 뎁스)
+      const zn=1-Math.pow(1-znRaw,1.7);
+      targetZ=3.9-zn*3.55;                                     // 월드 z 3.9(창문 앞)→0.35(강아지 코앞)
+      // 리치 마그넷: 깊이 들어갈수록 화면 위치도 강아지 쪽으로 수렴
       const dp=dogScreenPos();
-      const magnet=clamp01((zn-.55)/.45)*.35;
+      const magnet=clamp01((znRaw-.5)/.5)*.4;
       nx+=(dp.x/innerWidth-nx)*magnet;
       ny+=(dp.y/innerHeight-ny)*magnet;
+      // ★접촉: 충분히 깊이 + 강아지 반경 안이면 손이 강아지 표면에서 멈춘다 (통과 방지)
+      const db=dogBase();
+      const distDog=Math.hypot(simHandDraw.x-dp.x, simHandDraw.y-dp.y);
+      hand3dContact = znRaw>.74 && distDog<Math.max(130,db.r*1.15);
+      if (hand3dContact){
+        targetZ=Math.max(targetZ,1.0)+Math.sin(restBob*6.5)*.035;   // 표면 정지 + 쓰다듬는 미세 결
+        // 쓰다듬는 움직임(속도 有)일 때만 촉감 피드백 하트
+        if (performance.now()-hand3dTouchFxAt>650 && simHandDraw.speed>140){
+          hand3dTouchFxAt=performance.now();
+          emit('heart', simHandDraw.x, simHandDraw.y-24, 3);
+        }
+      }
     } else {
       targetZ=2.5+Math.sin(restBob*1.3)*.06;                   // 시연 모드: 중간 깊이
     }
@@ -2732,9 +2745,10 @@ window.__MUNG__ = {
       calibrated:(hand3dDepth.max-hand3dDepth.min)>=HAND3D_DEPTH_MIN_SPAN,
       depthSpan:Math.round(((hand3dDepth.max||0)-(hand3dDepth.min||0))*1000)/1000,
       yawDeg:Math.round(new THREE.Euler().setFromQuaternion(hand3dQDev,'YXZ').y*180/Math.PI),
+      contact:hand3dContact,
       curls:Object.fromEntries(Object.entries(hand3dPose.curls).map(([k,v])=>[k,Math.round(v*100)/100])) },
     handRealtime:{ presence:Math.round(handPresence*100)/100, tracking:!!currentSimulationHand(),
-      curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate, build:'v6-3dhand-6' },
+      curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate, build:'v6-3dhand-7' },
     simulation:{phase:simExperience.phase,state:simulationCopy().state,trust:Math.round(simExperience.trust),
       completed:simExperience.completed,manual:simExperience.manual,handVisible:!!currentSimulationHand(),cameraVisible:false},
     online:navigator.onLine, fps:fpsNow, webglReady, eventCount:eventLog.length
