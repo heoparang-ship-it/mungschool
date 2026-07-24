@@ -685,6 +685,7 @@
       <div>성공 <strong id="opSuccess">0</strong></div>
       <div>오류 <strong id="opErrors">0</strong></div>
       <div>FPS <strong id="opFps">0</strong></div>
+      <div>인식 <strong id="opVision">-</strong></div>
       <div>카메라 <strong id="opCamera">대기</strong></div>
       <div>네트워크 <strong id="opNetwork">확인</strong></div>
     </div>
@@ -1296,6 +1297,7 @@ function updateOperator() {
   $('opSuccess').textContent = session?.success || 0;
   $('opErrors').textContent = session?.errors || 0;
   $('opFps').textContent = typeof fpsNow === 'number' ? fpsNow : 0;
+  if ($('opVision')) $('opVision').textContent = (typeof infHz==='number'&&infHz) ? `${infHz}Hz · ${infMs}ms` : '-';
   $('opCamera').textContent = videoReady ? '작동' : '대기/대체';
   $('opNetwork').textContent = navigator.onLine ? '온라인' : '오프라인·터치';
   $('eventPreview').textContent = eventLog.slice(-12).reverse().map(e => `${e.at.slice(11,19)}  ${e.type}  ${e.input||''} ${e.reason||''}`).join('\n') || '이벤트 없음';
@@ -1673,7 +1675,8 @@ async function startCamera() {
   setARGuide('센서 권한', '허용해 주세요', '영상은 표시하거나 저장하지 않습니다.');
   const wants = [
     { video: { facingMode: facing === 'environment' ? { ideal:'environment' } : 'user',
-               width:{ ideal:1280 }, height:{ ideal:720 } }, audio:false },
+               width:{ ideal:1280 }, height:{ ideal:720 },
+               frameRate:{ ideal:60, min:24 } }, audio:false },   // 60fps 요청 = 모션블러·지연 감소
     { video: true, audio:false },                       // 폴백: 아무 카메라나
   ];
   let ok = false;
@@ -1695,6 +1698,7 @@ async function startCamera() {
   try { await video.play(); } catch(e) {}               // 자동재생 강제
   const ready = () => {
     videoReady = true; dot('dCam', true);
+    startFrameSyncedVision();   // 카메라 프레임 동기 추론 시작
     setARGuide('센서 연결', '멍이 준비 완료', '손과 접근 속도를 인식합니다.');
     setHandStatus('손 인식 대기');
   };
@@ -1837,8 +1841,10 @@ let handSnap = null, holdName = null, holdStart = 0, lastFired = '', lastFiredAt
       runningMode: 'VIDEO', numHands: 1 });
     // CPU 추론 우선: 3D 손 + 강아지 두 WebGL 컨텍스트와 GPU 자원 경합을 피해 인식 안정화.
     // (GPU delegate는 create는 성공해도 프레임 단위로 조용히 실패해 인식이 끊기는 사례가 있음)
-    try { gestureRec = await makeGesture('CPU'); visionDelegate='CPU'; }
-    catch(e) { gestureRec = await makeGesture('GPU'); visionDelegate='GPU'; }
+    // 기본 CPU (WebGL 경합 회피 검증됨) · ?delegate=gpu 로 GPU A/B 테스트 가능
+    const wantGpu = new URLSearchParams(location.search).get('delegate')==='gpu';
+    try { gestureRec = await makeGesture(wantGpu?'GPU':'CPU'); visionDelegate=wantGpu?'GPU':'CPU'; }
+    catch(e) { gestureRec = await makeGesture(wantGpu?'CPU':'GPU'); visionDelegate=wantGpu?'CPU':'GPU'; }
     dot('dHand', true);
     const makeFace = delegate => FaceDetector.createFromOptions(fs, {
       baseOptions: { modelAssetPath:
@@ -1880,18 +1886,52 @@ function tickHandDebug(t) {
 }
 let frameNo = 0;
 const gEvery = isMobile ? 3 : 2, fEvery = isMobile ? 8 : 6;   // 얼굴은 접근속도 판정용이라 10Hz면 충분
-function tickVision(t) {
-  if (!videoReady) return;
-  frameNo++;
-  if (gestureRec && frameNo % gEvery === 0) {
-    const res = gestureRec.recognizeForVideo(video, t);
+/* ─── 정식 One-Euro 필터: 정지 시 떨림 제거 + 빠른 이동 시 지연 없음 (관절 21점 원천 필터) ─── */
+class OneEuro {
+  constructor(minCutoff, beta){ this.mc=minCutoff; this.beta=beta; this.dc=1; this.xP=null; this.dxP=0; this.tP=null; }
+  a(cut,dt){ const tau=1/(2*Math.PI*cut); return 1/(1+tau/dt); }
+  f(x,t){
+    if (this.tP===null){ this.tP=t; this.xP=x; return x; }
+    const dt=Math.max(1e-3,(t-this.tP)/1000); this.tP=t;
+    const dx=(x-this.xP)/dt;
+    this.dxP+=(dx-this.dxP)*this.a(this.dc,dt);
+    const cut=this.mc+this.beta*Math.abs(this.dxP);
+    this.xP+=(x-this.xP)*this.a(cut,dt);
+    return this.xP;
+  }
+  reset(){ this.tP=null; this.dxP=0; }
+}
+const oePts=[], oePts3=[];
+for (let i=0;i<21;i++){
+  oePts.push({ x:new OneEuro(1.6,.006), y:new OneEuro(1.6,.006) });                     // 화면 px
+  oePts3.push({ x:new OneEuro(1.3,.09), y:new OneEuro(1.3,.09), z:new OneEuro(1.0,.06) }); // 정규화·깊이
+}
+let oeLastSeen=0;
+function resetHandFilters(){ for (let i=0;i<21;i++){ oePts[i].x.reset(); oePts[i].y.reset();
+  oePts3[i].x.reset(); oePts3[i].y.reset(); oePts3[i].z.reset(); } }
+/* 인식 계측 */
+let infMs=0, infHz=0, infCount=0, infCountAt=0;
+function runGesture(t) {
+  if (!gestureRec || !videoReady) return;
+  const t0=performance.now();
+  const res = gestureRec.recognizeForVideo(video, t);
+  infMs = Math.round((performance.now()-t0)*10)/10;
+  infCount++;
+  if (t0-infCountAt>1000){ infHz=infCount; infCount=0; infCountAt=t0; }
+  {
     const lm = res.landmarks?.[0];
     const g = res.gestures?.[0]?.[0];
     const known = !!(g && GESTURE_MAP[g.categoryName] && g.score > 0.6);
     if (lm) {
-      handSnap = { pts: lm.map(p => videoToScreen(p.x, p.y)),
-                   // 3D 자세용 원시 좌표: 미러 보정 x + MediaPipe 상대 깊이 z (저장하지 않음)
-                   pts3: lm.map(p => ({ x: mirrored ? 1-p.x : p.x, y: p.y, z: p.z || 0 })),
+      const now0=performance.now();
+      if (now0-oeLastSeen>650) resetHandFilters();   // 재등장 시 필터 초기화 (이전 잔상 제거)
+      oeLastSeen=now0;
+      handSnap = { pts: lm.map((p,i) => { const s=videoToScreen(p.x, p.y);
+                     return { x:oePts[i].x.f(s.x,now0), y:oePts[i].y.f(s.y,now0) }; }),
+                   // 3D 자세용 좌표: 미러 보정 x + MediaPipe 상대 깊이 z (원본 저장 안 함)
+                   pts3: lm.map((p,i) => ({ x:oePts3[i].x.f(mirrored ? 1-p.x : p.x, now0),
+                                            y:oePts3[i].y.f(p.y, now0),
+                                            z:oePts3[i].z.f(p.z || 0, now0) })),
                    handed: res.handedness?.[0]?.[0]?.categoryName || '',
                    icon: known ? GESTURE_KO[g.categoryName] : '',
                    gesture:g?.categoryName || '', known, score: g ? g.score : 0, ts: performance.now() };
@@ -1913,16 +1953,35 @@ function tickVision(t) {
       }
     } else { holdName = null; if (!g) lastFired = ''; }
   }
-  if (faceDet && mirrored && frameNo % fEvery === 0) {
-    const res = faceDet.detectForVideo(video, t+0.1);
-    const d = res.detections?.[0];
-    if (d) {
-      const bb = d.boundingBox;
-      facePos = { x:(bb.originX + bb.width/2)/video.videoWidth, y:(bb.originY + bb.height/2)/video.videoHeight };
-      faceScale = bb.width/(video.videoWidth||1);
-      faceSeen = performance.now()/1000;
-    }
+}
+function runFace(t) {
+  if (!faceDet || !mirrored || !videoReady) return;
+  const res = faceDet.detectForVideo(video, t+0.1);
+  const d = res.detections?.[0];
+  if (d) {
+    const bb = d.boundingBox;
+    facePos = { x:(bb.originX + bb.width/2)/video.videoWidth, y:(bb.originY + bb.height/2)/video.videoHeight };
+    faceScale = bb.width/(video.videoWidth||1);
+    faceSeen = performance.now()/1000;
   }
+}
+/* ─── 카메라 프레임 동기 추론: 카메라가 새 프레임을 줄 때마다 정확히 1회 (중복·스킵 없음) ─── */
+let rvfcActive = false;
+function startFrameSyncedVision() {
+  if (rvfcActive || !video.requestVideoFrameCallback) return;
+  rvfcActive = true;
+  const onFrame = () => {
+    const t = performance.now();
+    try { runGesture(t); frameNo++; if (frameNo % fEvery === 0) runFace(t); } catch(e) {}
+    video.requestVideoFrameCallback(onFrame);
+  };
+  video.requestVideoFrameCallback(onFrame);
+}
+function tickVision(t) {   // requestVideoFrameCallback 미지원 브라우저 폴백 (rAF 주기)
+  if (rvfcActive || !videoReady) return;
+  frameNo++;
+  if (frameNo % gEvery === 0) runGesture(t);
+  if (frameNo % fEvery === 0) runFace(t);
 }
 
 /* ─────────── 2.5D 상시 손 · 실시간 추종 시스템 ───────────
@@ -2482,7 +2541,9 @@ function tickSimulation(t,dt) {
     }
   }
   if (now-lastSimUiAt>220) {
-    const handStatus=hand ? (open?'손바닥 인식됨':'손 인식됨') : '손 대기';
+    const needCal=hand && hand.actual && (hand3dDepth.max-hand3dDepth.min)<HAND3D_DEPTH_MIN_SPAN;
+    const handStatus=needCal ? '손을 앞뒤로 한 번 왕복해 주세요'
+      : hand ? (open?'손바닥 인식됨':'손 인식됨') : '손 대기';
     const voiceStatus=now-lastVoiceHeardAt<1600?'음성 인식됨':'음성 대기';
     $('simSensorLine').textContent=`${handStatus} · ${voiceStatus}`;
     updateSimulationUI(); lastSimUiAt=now;
@@ -2748,7 +2809,7 @@ window.__MUNG__ = {
       contact:hand3dContact,
       curls:Object.fromEntries(Object.entries(hand3dPose.curls).map(([k,v])=>[k,Math.round(v*100)/100])) },
     handRealtime:{ presence:Math.round(handPresence*100)/100, tracking:!!currentSimulationHand(),
-      curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate, build:'v6-3dhand-7' },
+      curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate, build:'v7-webmax-1' },
     simulation:{phase:simExperience.phase,state:simulationCopy().state,trust:Math.round(simExperience.trust),
       completed:simExperience.completed,manual:simExperience.manual,handVisible:!!currentSimulationHand(),cameraVisible:false},
     online:navigator.onLine, fps:fpsNow, webglReady, eventCount:eventLog.length
