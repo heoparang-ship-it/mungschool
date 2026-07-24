@@ -1297,8 +1297,12 @@ function updateOperator() {
   $('opSuccess').textContent = session?.success || 0;
   $('opErrors').textContent = session?.errors || 0;
   $('opFps').textContent = typeof fpsNow === 'number' ? fpsNow : 0;
-  if ($('opVision')) $('opVision').textContent = (typeof infHz==='number'&&infHz) ? `${infHz}Hz · ${infMs}ms` : '-';
-  $('opCamera').textContent = videoReady ? '작동' : '대기/대체';
+  if ($('opVision')) $('opVision').textContent = (typeof infHz==='number'&&infHz)
+    ? `${infHz}Hz · ${infMs}ms` + (e2eMs ? ` · 지연 ${Math.round(e2eMs)}ms` : '')
+      + (infPath==='worker' ? ' · W' : '') : '-';
+  $('opCamera').textContent = videoReady
+    ? (camInfo.h ? `${camInfo.h}p${camInfo.fps||''}` + (camInfo.tuned?` · ${camInfo.tuned}`:'') : '작동')
+    : '대기/대체';
   $('opNetwork').textContent = navigator.onLine ? '온라인' : '오프라인·터치';
   $('eventPreview').textContent = eventLog.slice(-12).reverse().map(e => `${e.at.slice(11,19)}  ${e.type}  ${e.input||''} ${e.reason||''}`).join('\n') || '이벤트 없음';
 }
@@ -1657,6 +1661,7 @@ function dogBase() {
 /* ─────────── 카메라 (화면에는 노출하지 않고 손·거리 인식에만 사용) ─────────── */
 const video = $('cam');
 let videoReady = false, facing = 'user', mirrored = true, stream = null;
+const camInfo = { w:0, h:0, fps:0, tuned:'' };     // 실제 잡힌 해상도·프레임레이트 (운영 화면 근거)
 async function requestMedia(constraints, timeout=9000) {
   if (!navigator.mediaDevices?.getUserMedia) throw new Error('media_unsupported');
   return new Promise((resolve,reject) => {
@@ -1692,12 +1697,27 @@ async function startCamera() {
   video.srcObject = stream;
   document.body.classList.add('cameraActive');
   // 실제 잡힌 카메라 방향으로 미러 여부 결정
-  const st = stream.getVideoTracks()[0].getSettings();
+  const track0 = stream.getVideoTracks()[0];
+  const st = track0.getSettings();
   mirrored = !(st.facingMode && st.facingMode.includes('environment'));
   video.classList.toggle('mirror', mirrored);
+  // 노출·초점·화이트밸런스 연속 모드 요청(지원 기기만): 밝기 요동과 초점 흔들림이 줄면
+  // 모션블러·랜드마크 지터가 함께 줄어든다. 미지원 기기에서는 조용히 건너뛴다.
+  try {
+    const caps = track0.getCapabilities ? track0.getCapabilities() : {};
+    const adv = [], tuned = [];
+    const has=(k)=>Array.isArray(caps[k]) && caps[k].includes('continuous');
+    if (has('exposureMode')) { adv.push({ exposureMode:'continuous' }); tuned.push('노출'); }
+    if (has('focusMode')) { adv.push({ focusMode:'continuous' }); tuned.push('초점'); }
+    if (has('whiteBalanceMode')) { adv.push({ whiteBalanceMode:'continuous' }); tuned.push('WB'); }
+    if (adv.length) { await track0.applyConstraints({ advanced:adv }); camInfo.tuned = tuned.join('·'); }
+  } catch(e) {}
+  const s2 = track0.getSettings ? track0.getSettings() : st;
+  camInfo.w = s2.width || 0; camInfo.h = s2.height || 0; camInfo.fps = Math.round(s2.frameRate || 0);
   try { await video.play(); } catch(e) {}               // 자동재생 강제
   const ready = () => {
     videoReady = true; dot('dCam', true);
+    startVisionWorker();        // 옵트인(?worker=1) 워커 추론 준비
     startFrameSyncedVision();   // 카메라 프레임 동기 추론 시작
     setARGuide('센서 연결', '멍이 준비 완료', '손과 접근 속도를 인식합니다.');
     setHandStatus('손 인식 대기');
@@ -1829,27 +1849,28 @@ const HAND_LINKS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10]
                     [9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
 let gestureRec = null, faceDet = null, visionDelegate = '';
 let handSnap = null, holdName = null, holdStart = 0, lastFired = '', lastFiredAt = 0, ringFx = null, lastHandSeen = 0;
+let handTrackStartAt = 0;      // 손이 (재)등장한 시각 — 깊이 왕복 안내를 초반에만 띄우는 기준
+const VISION_URLS = {
+  wasm:   'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm',
+  bundle: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs',
+  gesture:'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task',
+  face:   'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite' };
+const wantGpu = new URLSearchParams(location.search).get('delegate')==='gpu';
 (async () => {
   try {
-    const fs = await FilesetResolver.forVisionTasks(
-      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+    const fs = await FilesetResolver.forVisionTasks(VISION_URLS.wasm);
     // GPU 추론 우선 시도 → 미지원 기기는 CPU 자동 폴백 (추론 시간 단축 = 히치 제거)
     const makeGesture = delegate => GestureRecognizer.createFromOptions(fs, {
-      baseOptions: { modelAssetPath:
-        'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task',
-        delegate },
+      baseOptions: { modelAssetPath: VISION_URLS.gesture, delegate },
       runningMode: 'VIDEO', numHands: 1 });
     // CPU 추론 우선: 3D 손 + 강아지 두 WebGL 컨텍스트와 GPU 자원 경합을 피해 인식 안정화.
     // (GPU delegate는 create는 성공해도 프레임 단위로 조용히 실패해 인식이 끊기는 사례가 있음)
     // 기본 CPU (WebGL 경합 회피 검증됨) · ?delegate=gpu 로 GPU A/B 테스트 가능
-    const wantGpu = new URLSearchParams(location.search).get('delegate')==='gpu';
     try { gestureRec = await makeGesture(wantGpu?'GPU':'CPU'); visionDelegate=wantGpu?'GPU':'CPU'; }
     catch(e) { gestureRec = await makeGesture(wantGpu?'CPU':'GPU'); visionDelegate=wantGpu?'CPU':'GPU'; }
     dot('dHand', true);
     const makeFace = delegate => FaceDetector.createFromOptions(fs, {
-      baseOptions: { modelAssetPath:
-        'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
-        delegate },
+      baseOptions: { modelAssetPath: VISION_URLS.face, delegate },
       runningMode: 'VIDEO' });
     try { faceDet = await makeFace('CPU'); } catch(e) { faceDet = await makeFace('GPU'); }
     dot('dFace', true);
@@ -1910,49 +1931,99 @@ let oeLastSeen=0;
 function resetHandFilters(){ for (let i=0;i<21;i++){ oePts[i].x.reset(); oePts[i].y.reset();
   oePts3[i].x.reset(); oePts3[i].y.reset(); oePts3[i].z.reset(); } }
 /* 인식 계측 */
-let infMs=0, infHz=0, infCount=0, infCountAt=0;
-function runGesture(t) {
-  if (!gestureRec || !videoReady) return;
+let infMs=0, infHz=0, infCount=0, infCountAt=0, infPath='main', e2eMs=0, e2eSrc='infer';
+/* ─── 절대 깊이: worldLandmarks(미터 근사)로 사용자 손 크기를 학습하고, 화면상 손바닥 각크기와
+   묶어 "카메라~손 거리"를 근사한다. 손이 크든 작든, 시작 위치가 어디든 첫 프레임부터
+   가까이=장면 깊숙이가 성립 → 사전 캘리브레이션이 필요 없다. ─── */
+const HAND_METRIC = { palmM:.085, fovDeg:62 };
+const HAND_DIST_NEAR=.17, HAND_DIST_FAR=.68;    // 카메라 코앞 ~ 팔 뻗은 거리(m)
+function depthSignal(lm, wl){
+  const vw=video.videoWidth||1280, vh=video.videoHeight||720;
+  if (wl && wl[0] && wl[9]){
+    const pm=Math.hypot(wl[9].x-wl[0].x, wl[9].y-wl[0].y, (wl[9].z||0)-(wl[0].z||0));
+    if (pm>.03 && pm<.18) HAND_METRIC.palmM+=(pm-HAND_METRIC.palmM)*.06;   // 개인 손 크기 학습
+  }
+  const palmPx=Math.hypot((lm[9].x-lm[0].x)*vw, (lm[9].y-lm[0].y)*vh);
+  if (!(palmPx>8)) return null;
+  const focal=.5*vw/Math.tan(HAND_METRIC.fovDeg*Math.PI/360);
+  const distM=focal*HAND_METRIC.palmM/palmPx;
+  return { distM, zn:clamp01((HAND_DIST_FAR-distM)/(HAND_DIST_FAR-HAND_DIST_NEAR)),
+           personalized:!!(wl&&wl[0]) };
+}
+/* ─── 관절각 보조 분류기: 공식 제스처 점수가 낮아 놓친 프레임을 굽힘·방향으로 직접 판별해
+   인식률을 올린다. 공식 결과가 있으면 항상 공식 우선, 3프레임 연속 동일할 때만 채택. ─── */
+let poseVote='', poseVoteN=0;
+function classifyPose(pts){
+  const c=fingerCurls(pts);
+  if (!c) return '';
+  const scale=Math.abs(pts[9].y-pts[0].y)+Math.abs(pts[9].x-pts[0].x);
+  const ext=f=>c[f]<.34, cur=f=>c[f]>.62;
+  const up=(a,b)=>pts[a].y < pts[b].y - scale*.28;         // 화면 y는 아래로 증가
+  if (ext('index')&&ext('middle')&&ext('ring')&&ext('pinky')) return 'Open_Palm';
+  if (ext('index')&&ext('middle')&&cur('ring')&&cur('pinky')) return 'Victory';
+  if (ext('index')&&cur('middle')&&cur('ring')&&cur('pinky')&&up(8,5)) return 'Pointing_Up';
+  if (cur('index')&&cur('middle')&&cur('ring')&&cur('pinky'))
+    return (c.thumb<.32 && up(4,2)) ? 'Thumb_Up' : 'Closed_Fist';
+  return '';
+}
+/* 인식 결과 적용 — 메인스레드·Worker 두 경로가 같은 함수를 쓴다 (판정 로직 단일화) */
+function applyHandResult(lm, wl, handed, gRaw, capture){
+  const now0=performance.now();
+  // 카메라 캡처 시각을 스냅샷 기준으로 삼아 지연 보상 정확도를 올린다 (이상값은 무시)
+  const capOk=!!(capture && capture<=now0+1 && now0-capture<250);
+  const ts=capOk ? capture : now0;
+  e2eSrc=capOk ? 'camera' : 'infer';
+  let name = gRaw && GESTURE_MAP[gRaw.categoryName] && gRaw.score>0.6 ? gRaw.categoryName : '';
+  let score = gRaw ? gRaw.score : 0, gsrc = name ? 'model' : '';
+  if (lm) {
+    if (now0-oeLastSeen>650) resetHandFilters();   // 재등장 시 필터 초기화 (이전 잔상 제거)
+    oeLastSeen=now0;
+    const pts = lm.map((p,i) => { const s=videoToScreen(p.x, p.y);
+      return { x:oePts[i].x.f(s.x,now0), y:oePts[i].y.f(s.y,now0) }; });
+    if (name) { poseVote=''; poseVoteN=0; }
+    else {
+      const cand=classifyPose(pts);
+      if (cand && cand===poseVote) poseVoteN++; else { poseVote=cand; poseVoteN=cand?1:0; }
+      if (poseVoteN>=3){ name=cand; score=Math.max(score,.62); gsrc='joint'; }
+    }
+    const known=!!name;
+    handSnap = { pts,
+                 // 3D 자세용 좌표: 미러 보정 x + MediaPipe 상대 깊이 z (원본 저장 안 함)
+                 pts3: lm.map((p,i) => ({ x:oePts3[i].x.f(mirrored ? 1-p.x : p.x, now0),
+                                          y:oePts3[i].y.f(p.y, now0),
+                                          z:oePts3[i].z.f(p.z || 0, now0) })),
+                 handed: handed || '',
+                 depth: depthSignal(lm, wl),
+                 icon: known ? GESTURE_KO[name] : '',
+                 gesture:name, known, score, gsrc, ts };
+    if (!handTrackStartAt || now0-lastHandSeen>2500) handTrackStartAt = now0;
+    lastHandSeen = now0;
+    setHandStatus(known ? `${GESTURE_KO[name]} 인식` : '손 추적 중');
+  } else if (now0 - lastHandSeen > 800) {
+    setHandStatus('손 인식 대기'); poseVote=''; poseVoteN=0;
+  }
+  if (name) {
+    if (name !== holdName) { holdName = name; holdStart = now0; }
+    const held = now0 - holdStart;
+    if (handSnap) handSnap.hold = Math.min(1, held/500);
+    if (held >= 500 && (name !== lastFired || now0 - lastFiredAt > 2500)) {
+      lastFired = name; lastFiredAt = now0; holdStart = now0;
+      setHandStatus(`${GESTURE_KO[name]} 전달`);
+      wordPop(cmdName(GESTURE_MAP[name]) + '!');
+      command(GESTURE_MAP[name], 'hand');
+    }
+  } else { holdName = null; if (!gRaw) lastFired = ''; }
+}
+function runGesture(t, capture) {
+  if (!gestureRec || !videoReady || workerActive) return;
   const t0=performance.now();
-  const res = gestureRec.recognizeForVideo(video, t);
+  let res=null;
+  try { res = gestureRec.recognizeForVideo(video, t); } catch(e) { return; }
   infMs = Math.round((performance.now()-t0)*10)/10;
   infCount++;
   if (t0-infCountAt>1000){ infHz=infCount; infCount=0; infCountAt=t0; }
-  {
-    const lm = res.landmarks?.[0];
-    const g = res.gestures?.[0]?.[0];
-    const known = !!(g && GESTURE_MAP[g.categoryName] && g.score > 0.6);
-    if (lm) {
-      const now0=performance.now();
-      if (now0-oeLastSeen>650) resetHandFilters();   // 재등장 시 필터 초기화 (이전 잔상 제거)
-      oeLastSeen=now0;
-      handSnap = { pts: lm.map((p,i) => { const s=videoToScreen(p.x, p.y);
-                     return { x:oePts[i].x.f(s.x,now0), y:oePts[i].y.f(s.y,now0) }; }),
-                   // 3D 자세용 좌표: 미러 보정 x + MediaPipe 상대 깊이 z (원본 저장 안 함)
-                   pts3: lm.map((p,i) => ({ x:oePts3[i].x.f(mirrored ? 1-p.x : p.x, now0),
-                                            y:oePts3[i].y.f(p.y, now0),
-                                            z:oePts3[i].z.f(p.z || 0, now0) })),
-                   handed: res.handedness?.[0]?.[0]?.categoryName || '',
-                   icon: known ? GESTURE_KO[g.categoryName] : '',
-                   gesture:g?.categoryName || '', known, score: g ? g.score : 0, ts: performance.now() };
-      lastHandSeen = performance.now();
-      setHandStatus(known ? `${GESTURE_KO[g.categoryName]} 인식` : '손 추적 중');
-    } else if (performance.now() - lastHandSeen > 800) {
-      setHandStatus('손 인식 대기');
-    }
-    const now = performance.now();
-    if (known) {
-      if (g.categoryName !== holdName) { holdName = g.categoryName; holdStart = now; }
-      const held = now - holdStart;
-      if (handSnap) handSnap.hold = Math.min(1, held/500);
-      if (held >= 500 && (g.categoryName !== lastFired || now - lastFiredAt > 2500)) {
-        lastFired = g.categoryName; lastFiredAt = now; holdStart = now;
-        setHandStatus(`${GESTURE_KO[g.categoryName]} 전달`);
-        wordPop(cmdName(GESTURE_MAP[g.categoryName]) + '!');
-        command(GESTURE_MAP[g.categoryName], 'hand');
-      }
-    } else { holdName = null; if (!g) lastFired = ''; }
-  }
+  applyHandResult(res.landmarks?.[0]||null, res.worldLandmarks?.[0]||null,
+                  res.handedness?.[0]?.[0]?.categoryName||'', res.gestures?.[0]?.[0]||null, capture);
 }
 function runFace(t) {
   if (!faceDet || !mirrored || !videoReady) return;
@@ -1965,14 +2036,123 @@ function runFace(t) {
     faceSeen = performance.now()/1000;
   }
 }
-/* ─── 카메라 프레임 동기 추론: 카메라가 새 프레임을 줄 때마다 정확히 1회 (중복·스킵 없음) ─── */
+/* ─── Web Worker 추론 분리 (옵트인 ?worker=1) ───────────────────────────────
+   손 인식을 워커로 옮기면 메인 스레드는 렌더에만 집중해 60fps가 고정된다.
+   기본은 꺼둔다: 발표 직전에 검증 불가능한 경로를 기본값으로 켜지 않는다.
+   런타임 자동 폴백 — 초기화 9초 초과 / 워커 오류 / 4초간 결과 없음 → 메인 스레드 복귀.
+   워커도 프레임 비트맵만 전달받고 즉시 close() 한다. 영상·랜드마크 저장 없음. */
+let visionWorker=null, workerActive=false, workerPending=false, workerBootAt=0, workerLastResAt=0;
+const wantWorker = (()=>{ const v=new URLSearchParams(location.search).get('worker');
+  return (v==='1'||v==='on') && typeof Worker!=='undefined' && typeof createImageBitmap==='function'; })();
+// 클래식 워커 + 동적 import: MediaPipe wasm 로더가 importScripts를 쓰기 때문에
+// 모듈 워커(type:'module')에서는 초기화가 실패한다. 클래식 워커는 importScripts가 살아 있고
+// Chrome/Edge는 클래식 워커 안에서도 import()를 지원 → 두 요구를 동시에 만족.
+function workerSource(){ return `
+let rec=null;
+const pick = (a)=> (a&&a[0]) ? a[0] : null;
+self.onmessage = async (e) => {
+  const d = e.data;
+  if (d.type==='init') {
+    try {
+      const M = await import('${VISION_URLS.bundle}');
+      const fs = await M.FilesetResolver.forVisionTasks(d.wasm);
+      const make = delegate => M.GestureRecognizer.createFromOptions(fs, {
+        baseOptions:{ modelAssetPath:d.model, delegate }, runningMode:'VIDEO', numHands:1 });
+      try { rec = await make(d.delegate); }
+      catch(err){ rec = await make(d.delegate==='GPU'?'CPU':'GPU'); }
+      self.postMessage({ type:'ready' });
+    } catch(err){ self.postMessage({ type:'fail', msg:String(err&&err.message||err) }); }
+  } else if (d.type==='frame') {
+    if (!rec) { d.bitmap.close(); return; }
+    const t0=performance.now(); let res=null;
+    try { res = rec.recognizeForVideo(d.bitmap, d.ts); }
+    catch(err){ self.postMessage({ type:'fail', msg:String(err&&err.message||err) }); }
+    d.bitmap.close();
+    if (!res) return;
+    const lm = pick(res.landmarks), wl = pick(res.worldLandmarks);
+    const hd = pick(res.handedness), g = pick(res.gestures);
+    self.postMessage({ type:'res', ms:performance.now()-t0, capture:d.capture,
+      lm: lm ? lm.map(p=>({x:p.x,y:p.y,z:p.z||0})) : null,
+      wl: wl ? wl.map(p=>({x:p.x,y:p.y,z:p.z||0})) : null,
+      handed: hd&&hd[0] ? hd[0].categoryName : '',
+      g: g&&g[0] ? { categoryName:g[0].categoryName, score:g[0].score } : null });
+  }
+};
+`; }
+function fallbackToMainVision(why){
+  if (!visionWorker && !workerActive) return;
+  try { visionWorker && visionWorker.terminate(); } catch(e) {}
+  visionWorker=null; workerActive=false; workerPending=false; infPath='main';
+  try { recordEvent('vision_worker_fallback', { why }); } catch(e) {}
+}
+function startVisionWorker(){
+  if (!wantWorker || visionWorker) return;
+  let url='';
+  try {
+    url = URL.createObjectURL(new Blob([workerSource()], { type:'text/javascript' }));
+    visionWorker = new Worker(url);                     // 클래식 워커 (importScripts 필요)
+  } catch(e) { fallbackToMainVision('spawn'); return; }
+  finally { if (url) setTimeout(()=>{ try{ URL.revokeObjectURL(url); }catch(e){} }, 5000); }
+  workerBootAt = performance.now();
+  visionWorker.onerror = () => fallbackToMainVision('error');
+  visionWorker.onmessage = (e) => {
+    const d = e.data;
+    if (d.type==='ready') { workerActive=true; infPath='worker'; workerLastResAt=performance.now(); return; }
+    if (d.type==='fail')  { fallbackToMainVision(d.msg ? 'init:'+String(d.msg).slice(0,60) : 'fail'); return; }
+    if (d.type==='res') {
+      workerPending=false; workerLastResAt=performance.now();
+      infMs = Math.round(d.ms*10)/10; infCount++;
+      const nowc=performance.now();
+      if (nowc-infCountAt>1000){ infHz=infCount; infCount=0; infCountAt=nowc; }
+      applyHandResult(d.lm, d.wl, d.handed, d.g, d.capture);
+    }
+  };
+  visionWorker.postMessage({ type:'init', wasm:VISION_URLS.wasm, model:VISION_URLS.gesture,
+                             delegate: wantGpu?'GPU':'CPU' });
+  setTimeout(()=>{ if (!workerActive) fallbackToMainVision('init_timeout'); }, 9000);
+}
+function pumpWorkerFrame(t, capture){
+  if (!workerActive || !videoReady) return false;
+  const now0=performance.now();
+  if (workerLastResAt && now0-workerLastResAt>4000) { fallbackToMainVision('stalled'); return false; }
+  if (workerPending) return true;                       // 프레임 1장만 in-flight (지연 누적 방지)
+  workerPending=true;
+  createImageBitmap(video).then(bm => {
+    if (!visionWorker) { bm.close(); workerPending=false; return; }
+    visionWorker.postMessage({ type:'frame', bitmap:bm, ts:t, capture }, [bm]);
+  }).catch(()=>{ workerPending=false; });
+  return true;
+}
+
+/* ─── 적응형 추론 주기(메인스레드 전용): 빠른 기기에서는 카메라 프레임마다 인식해 최대 정밀도를,
+   느린 기기에서는 프레임을 건너뛰어 렌더 60fps와 반응성을 지킨다. 워커 경로는 오프스레드라
+   백프레셔(1장 in-flight)로 이미 자동 조절되므로 여기서 조이지 않는다. ─── */
+let gEveryMain = isMobile ? 2 : 1, cadenceAt = 0;
+function visionEveryMain(){
+  const now0 = performance.now();
+  if (now0 - cadenceAt > 900) {
+    cadenceAt = now0;
+    const slow = infMs > 42 || (fpsNow && fpsNow < 38);
+    const fast = infMs && infMs < 22 && (!fpsNow || fpsNow > 52);
+    if (slow) gEveryMain = Math.min(4, gEveryMain + 1);
+    else if (fast) gEveryMain = Math.max(isMobile ? 2 : 1, gEveryMain - 1);
+  }
+  return gEveryMain;
+}
+/* ─── 카메라 프레임 동기 추론: 카메라가 새 프레임을 줄 때마다 (여유가 있으면) 1회 ─── */
 let rvfcActive = false;
 function startFrameSyncedVision() {
   if (rvfcActive || !video.requestVideoFrameCallback) return;
   rvfcActive = true;
-  const onFrame = () => {
+  const onFrame = (now, meta) => {
     const t = performance.now();
-    try { runGesture(t); frameNo++; if (frameNo % fEvery === 0) runFace(t); } catch(e) {}
+    // 카메라가 실제로 프레임을 캡처한 시각 → 카메라→화면 지연을 실측하고 예측 보상에 사용
+    const cap = meta ? (meta.captureTime || meta.presentationTime || 0) : 0;
+    try {
+      frameNo++;
+      if (!pumpWorkerFrame(t, cap) && frameNo % visionEveryMain() === 0) runGesture(t, cap);
+      if (frameNo % fEvery === 0) runFace(t);
+    } catch(e) {}
     video.requestVideoFrameCallback(onFrame);
   };
   video.requestVideoFrameCallback(onFrame);
@@ -1980,7 +2160,7 @@ function startFrameSyncedVision() {
 function tickVision(t) {   // requestVideoFrameCallback 미지원 브라우저 폴백 (rAF 주기)
   if (rvfcActive || !videoReady) return;
   frameNo++;
-  if (frameNo % gEvery === 0) runGesture(t);
+  if (frameNo % gEvery === 0) { if (!pumpWorkerFrame(t, 0)) runGesture(t, 0); }
   if (frameNo % fEvery === 0) runFace(t);
 }
 
@@ -2038,11 +2218,89 @@ let hand3dOpacity = (()=>{ const v=parseFloat(new URLSearchParams(location.searc
   try { const s=parseFloat(localStorage.getItem('mung-hand-opacity')); if (Number.isFinite(s)) return Math.min(1,Math.max(.1,s)); } catch(e){}
   return .8; })();
 const hand3dPose = { x:0, y:-1, z:2.4, rz:-.15, curls:{index:.22,middle:.22,ring:.22,pinky:.22,thumb:.22} };
-// 적응형 깊이: 고정 기준 캘리브레이션 대신, 세션 중 관측된 손바닥 길이의 최소~최대 범위를
-// 실시간 학습해 그 안에서 0(최대 멀리)~1(최대 가까이)로 정규화한다. 시작 거리와 무관하게
-// "가까이=크게 · 멀리=작게"가 항상 성립. zn은 범위가 충분히 벌어지기 전까지 중립(.5).
-const hand3dDepth = { samples:[], base:0, ratio:.5, min:null, max:null };
+// 깊이 2층 구조:
+//  ① 절대 깊이(unit:'abs') — worldLandmarks로 개인 손 크기를 학습해 distM(미터)을 직접 계산.
+//     첫 프레임부터 올바른 깊이. 어린이/성인 손 크기 차이도 자동 정규화. 캘리브레이션 불필요.
+//  ② 적응형 상대 깊이(unit:'palm') — 절대 신호를 못 얻는 환경의 폴백. 세션 중 관측된 손바닥
+//     길이 최소~최대를 학습해 0(최대 멀리)~1(최대 가까이)로 정규화.
+// 어느 층이든 결과는 ratio 하나로 수렴하고, vel(초당 변화율)로 지연 예측 보상을 한다.
+const hand3dDepth = { ratio:.5, min:null, max:null, buf:[], bufN:0,
+                      unit:'palm', distM:0, personalized:false, vel:0, lastZn:.5, lastTs:0,
+                      rawDist:null, clampN:0, conf:0, absAt:0 };
 const HAND3D_DEPTH_MIN_SPAN = .04;
+const HAND3D_ABS_MIN_SPAN = .12;          // 절대 깊이: 12cm 이상 왕복하면 개인 도달범위로 스트레치
+const HAND3D_ABS_MAX_SPAN = .62;          // 팔 뻗기 물리 상한 — 이상치가 범위를 늘려 감도를 죽이는 것 방지
+const HAND3D_DIST_MIN = .12, HAND3D_DIST_MAX = 1.6;   // 물리적으로 가능한 카메라~손 거리(m)
+const HAND3D_MAX_SPEED = 3.0;             // 손의 최대 접근/후퇴 속도(m/s) — 슬루율 제한 기준
+const DEPTH_BUF_MAX = 200;                // 관측 창(30Hz에서 약 7초)
+function depthMinSpan(){ return hand3dDepth.unit==='abs' ? HAND3D_ABS_MIN_SPAN : HAND3D_DEPTH_MIN_SPAN; }
+/* 도달범위 학습: 단순 최소/최대는 이상치 한 프레임에 범위가 벌어져 감도가 영구히 죽는다.
+   관측 창의 백분위(하위 8% / 상위 92%)를 목표로 부드럽게 수렴시켜 이상치를 구조적으로 배제한다. */
+function depthRangeUpdate(raw){
+  const b=hand3dDepth.buf;
+  b.push(raw); if (b.length>DEPTH_BUF_MAX) b.shift();
+  if (hand3dDepth.min===null){ hand3dDepth.min=raw; hand3dDepth.max=raw; return; }
+  if (b.length<24){                                        // 표본 부족 구간: 즉시 반응형 최소/최대
+    hand3dDepth.min=Math.min(hand3dDepth.min,raw);
+    hand3dDepth.max=Math.max(hand3dDepth.max,raw);
+  } else if ((++hand3dDepth.bufN % 8)===0) {                // 8프레임마다 재계산 (비용 무시 가능)
+    const s=b.slice().sort((p,q)=>p-q);
+    const lo=s[Math.floor((s.length-1)*.08)], hi=s[Math.ceil((s.length-1)*.92)];
+    hand3dDepth.min+=(lo-hand3dDepth.min)*.25;
+    hand3dDepth.max+=(hi-hand3dDepth.max)*.25;
+  }
+  // 범위 상한: 팔 뻗기 물리한계를 넘으면 현재 값을 품은 채로 수축 (감도 보존)
+  if (hand3dDepth.unit==='abs'){
+    const sp=hand3dDepth.max-hand3dDepth.min;
+    if (sp>HAND3D_ABS_MAX_SPAN){
+      const c=Math.max(hand3dDepth.min+HAND3D_ABS_MAX_SPAN*.5,
+                       Math.min(hand3dDepth.max-HAND3D_ABS_MAX_SPAN*.5, raw));
+      hand3dDepth.min=c-HAND3D_ABS_MAX_SPAN*.5; hand3dDepth.max=c+HAND3D_ABS_MAX_SPAN*.5;
+    }
+  }
+}
+function learnDepth(sig, palmLen, ts){
+  // 원신호 선택: 절대 깊이(미터)가 있으면 그것을, 없으면 손바닥 길이 비율
+  let raw, zn;
+  if (sig && Number.isFinite(sig.distM)) {
+    // ① 물리 범위 클램프 ② 슬루율 제한(3m/s) — 단일 프레임 추정 오차가 깊이를 튀게 하는 것을 막는다.
+    let d=Math.max(HAND3D_DIST_MIN, Math.min(HAND3D_DIST_MAX, sig.distM));
+    if (d!==sig.distM) hand3dDepth.clampN++;
+    if (Number.isFinite(hand3dDepth.rawDist) && hand3dDepth.lastTs){
+      const dts=Math.min(.25,Math.max(.012,(ts-hand3dDepth.lastTs)/1000));
+      const jump=HAND3D_MAX_SPEED*dts+.02;
+      const lim=Math.max(hand3dDepth.rawDist-jump, Math.min(hand3dDepth.rawDist+jump, d));
+      if (lim!==d) hand3dDepth.clampN++;
+      d=lim;
+    }
+    if (hand3dDepth.unit!=='abs'){ hand3dDepth.min=null; hand3dDepth.max=null; hand3dDepth.buf.length=0; }
+    hand3dDepth.unit='abs'; hand3dDepth.absAt=ts; hand3dDepth.rawDist=d; hand3dDepth.distM=Math.round(d*1000)/1000;
+    hand3dDepth.personalized=!!sig.personalized;
+    // 학습에는 포화되지 않는 원거리값(-d: 클수록 가까움)을 쓰고, 매핑 기본값은 절대 거리 정규화.
+    // 이렇게 하면 사용자가 상정 범위 밖에 앉아 있어도 깊이가 한쪽에 붙어버리지 않는다.
+    raw=-d; zn=clamp01((HAND_DIST_FAR-d)/(HAND_DIST_FAR-HAND_DIST_NEAR));
+  } else if (palmLen>.015) {
+    // 절대 신호가 잠깐(1초 미만) 끊긴 정도로는 층을 바꾸지 않는다 — 전환 시 범위 재학습으로 깊이가 흔들리므로.
+    if (hand3dDepth.unit==='abs' && hand3dDepth.absAt && ts-hand3dDepth.absAt<1000) return;
+    if (hand3dDepth.unit!=='palm'){ hand3dDepth.min=null; hand3dDepth.max=null; hand3dDepth.buf.length=0; }
+    hand3dDepth.unit='palm'; raw=palmLen;
+  } else return;
+  // 적응형 범위 학습은 두 경로 모두에 적용 — 절대 깊이에서도 실사용 도달 범위로 스트레치해
+  // 사람이 실제로 뻗는 만큼이 화면 깊이 전체에 대응하게 한다.
+  depthRangeUpdate(raw);
+  const span=hand3dDepth.max-hand3dDepth.min;
+  if (span>=depthMinSpan()) zn=clamp01((raw-hand3dDepth.min)/span);
+  else if (zn===undefined) zn=.5;                          // 폴백 경로: 범위 학습 전 중립
+  hand3dDepth.conf=clamp01(span/(hand3dDepth.unit==='abs'?.24:.08));   // 범위 학습 성숙도
+  const prevRatio=hand3dDepth.ratio;
+  hand3dDepth.ratio+=(zn-hand3dDepth.ratio)*.45;           // 저역 필터 (감도↑)
+  if (hand3dDepth.lastTs){
+    const dts=Math.max(.012,(ts-hand3dDepth.lastTs)/1000);
+    const v=(hand3dDepth.ratio-prevRatio)/dts;
+    hand3dDepth.vel+=(v-hand3dDepth.vel)*.35;              // 깊이 속도(지연 예측용)
+  }
+  hand3dDepth.lastZn=zn; hand3dDepth.lastTs=ts;
+}
 // ─── 손 3D 자세 (손날·손등↔손바닥 뒤집기 인식) ───
 // 랜드마크의 미러보정 x·y + MediaPipe 상대 z로 손 기저(위·가로·법선)를 만들어
 // '손가락 위 + 손바닥이 카메라를 향한 중립 자세' 대비 회전 편차 쿼터니언을 구한다.
@@ -2195,7 +2453,10 @@ function tickHand3D(dt){
     targetRz=Math.max(-.6,Math.min(.45,(handTrack.angle||-.15)));
     if (hand.actual){
       // ★창문 모델: 실제 손이 화면에 다가갈수록 화면 속 손은 장면 깊숙이 들어가 치와와에게 간다.
-      const znRaw=clamp01(.5+(hand3dDepth.ratio-.5)*1.45);     // 0=몸쪽 1=화면 앞 (중앙 증폭)
+      // 지연 보상: 인식 프레임 이후 흐른 시간만큼 깊이 속도로 앞질러 예측 (최대 110ms)
+      const dAge=hand3dDepth.lastTs ? Math.min(.11,(performance.now()-hand3dDepth.lastTs)/1000) : 0;
+      const ratioPred=clamp01(hand3dDepth.ratio+(hand3dDepth.vel||0)*dAge*.6);
+      const znRaw=clamp01(.5+(ratioPred-.5)*1.45);              // 0=몸쪽 1=화면 앞 (중앙 증폭)
       // 비선형 커브: 멀리선 빠르게 이동, 강아지 근처에선 미세 제어 (만지기 직전 정밀 뎁스)
       const zn=1-Math.pow(1-znRaw,1.7);
       targetZ=3.9-zn*3.55;                                     // 월드 z 3.9(창문 앞)→0.35(강아지 코앞)
@@ -2316,22 +2577,14 @@ function updateHandTrack(dt) {
       handTrack.lastTs=snap.ts;
       handTrack.curlRaw=computeHandCurl(snap.pts);
       handTrack.curlsRaw=fingerCurls(snap.pts);
-      // z깊이 신호: 손바닥 길이(0↔9) — 주먹을 쥐어도 불변이라 거리 오판 없음
+      // z깊이 신호: ①절대 깊이(미터) 우선 ②손바닥 길이(0↔9) 폴백
+      //   — 둘 다 주먹을 쥐어도 불변이라 "쥐면 멀어져 보이는" 오판이 없다.
       const palmLen=Math.hypot(snap.pts[9].x-snap.pts[0].x,snap.pts[9].y-snap.pts[0].y)
                     /Math.max(1,Math.min(innerWidth,innerHeight));
-      if (palmLen>.015){
-        // 적응형 범위 학습: 관측 최소~최대를 추적 (미세 수축으로 과거 극값에 갇히지 않게)
-        if (hand3dDepth.min===null){ hand3dDepth.min=palmLen; hand3dDepth.max=palmLen; }
-        hand3dDepth.min=Math.min(hand3dDepth.min,palmLen);
-        hand3dDepth.max=Math.max(hand3dDepth.max,palmLen);
-        hand3dDepth.min+=(palmLen-hand3dDepth.min)*.0015;
-        hand3dDepth.max+=(palmLen-hand3dDepth.max)*.0015;
-        const span=hand3dDepth.max-hand3dDepth.min;
-        const zn=span>=HAND3D_DEPTH_MIN_SPAN
-          ? clamp01((palmLen-hand3dDepth.min)/span)            // 0=최대 멀리 · 1=최대 가까이
-          : .5;                                                 // 범위 학습 전엔 중립 깊이
-        hand3dDepth.ratio+=(zn-hand3dDepth.ratio)*.45;          // 저역 필터 (감도↑)
-      }
+      learnDepth(snap.depth, palmLen, snap.ts);
+      // 전체 지연 실측: 카메라 캡처(가능한 브라우저) 또는 추론 시작 → 이 프레임 반영까지
+      const lag=now-snap.ts;
+      e2eMs = e2eMs ? e2eMs+(lag-e2eMs)*.2 : lag;
     }
     const ahead=Math.min(.12,(now-snap.ts)/1000);         // 인식 공백은 최대 120ms 속도 예측으로 메꿈
     const px=c.x+handTrack.vx*ahead*.55, py=c.y+handTrack.vy*ahead*.55;
@@ -2541,8 +2794,15 @@ function tickSimulation(t,dt) {
     }
   }
   if (now-lastSimUiAt>220) {
-    const needCal=hand && hand.actual && (hand3dDepth.max-hand3dDepth.min)<HAND3D_DEPTH_MIN_SPAN;
+    // 절대 깊이는 첫 프레임부터 유효하므로 필수 캘리브레이션은 없다.
+    // 다만 도달범위를 아직 못 배웠으면(왕복 전) 깊이 해상도가 낮으므로 처음 10초만 부드럽게 권한다.
+    const dSpan=(hand3dDepth.max||0)-(hand3dDepth.min||0);
+    const tracked=hand && hand.actual;
+    const needCal=tracked && hand3dDepth.unit!=='abs' && dSpan<HAND3D_DEPTH_MIN_SPAN;
+    const wantSweep=tracked && hand3dDepth.unit==='abs' && dSpan<HAND3D_ABS_MIN_SPAN
+                    && handTrackStartAt && now-handTrackStartAt<10000;
     const handStatus=needCal ? '손을 앞뒤로 한 번 왕복해 주세요'
+      : wantSweep ? '손을 앞뒤로 한 번 왕복하면 더 정밀해져요'
       : hand ? (open?'손바닥 인식됨':'손 인식됨') : '손 대기';
     const voiceStatus=now-lastVoiceHeardAt<1600?'음성 인식됨':'음성 대기';
     $('simSensorLine').textContent=`${handStatus} · ${voiceStatus}`;
@@ -2803,13 +3063,19 @@ window.__MUNG__ = {
     handVisualActive:!!(handSnap && performance.now()-handSnap.ts<900), handKnown:!!handSnap?.known,
     hand3d:{ ready:hand3dReady, opacity:hand3dOpacity, z:Math.round(hand3dPose.z*100)/100,
       depthRatio:Math.round(hand3dDepth.ratio*100)/100,
-      calibrated:(hand3dDepth.max-hand3dDepth.min)>=HAND3D_DEPTH_MIN_SPAN,
+      calibrated:hand3dDepth.unit==='abs' || (hand3dDepth.max-hand3dDepth.min)>=HAND3D_DEPTH_MIN_SPAN,
       depthSpan:Math.round(((hand3dDepth.max||0)-(hand3dDepth.min||0))*1000)/1000,
+      depthUnit:hand3dDepth.unit, distM:Math.round(hand3dDepth.distM*100)/100,
+      personalized:hand3dDepth.personalized, depthVel:Math.round((hand3dDepth.vel||0)*100)/100,
+      depthConf:Math.round((hand3dDepth.conf||0)*100)/100, depthClamped:hand3dDepth.clampN,
+      depthSamples:hand3dDepth.buf.length,
       yawDeg:Math.round(new THREE.Euler().setFromQuaternion(hand3dQDev,'YXZ').y*180/Math.PI),
       contact:hand3dContact,
       curls:Object.fromEntries(Object.entries(hand3dPose.curls).map(([k,v])=>[k,Math.round(v*100)/100])) },
     handRealtime:{ presence:Math.round(handPresence*100)/100, tracking:!!currentSimulationHand(),
-      curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate, build:'v7-webmax-1' },
+      curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate,
+      infPath, infHz, infMs, e2eMs:Math.round(e2eMs), e2eSrc,
+      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v7-webmax-3' },
     simulation:{phase:simExperience.phase,state:simulationCopy().state,trust:Math.round(simExperience.trust),
       completed:simExperience.completed,manual:simExperience.manual,handVisible:!!currentSimulationHand(),cameraVisible:false},
     online:navigator.onLine, fps:fpsNow, webglReady, eventCount:eventLog.length
