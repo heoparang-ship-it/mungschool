@@ -19,7 +19,11 @@
   #stage { position:fixed; inset:0; width:100vw; height:100vh; pointer-events:none; z-index:3; opacity:0; }
   #dogSpriteWrap { position:fixed; left:var(--dog-x,50%); top:var(--dog-y,52%); width:min(470px,calc(42vw * var(--dog-scale,1))); aspect-ratio:1/1;
                    transform:translate(-50%,-50%); z-index:4; pointer-events:none; }
-  #dogSprite { position:absolute; inset:0; width:100%; height:100%; filter:drop-shadow(0 24px 18px rgba(15,27,38,.24)); }
+  /* --dog-lean-*: 손이 닿은 쪽으로 몸을 기대는 반응 (손 접촉 강도로 JS가 갱신).
+     wrap의 transform은 성공/오류 키프레임이 쓰므로 내부 캔버스에만 얹는다. */
+  #dogSprite { position:absolute; inset:0; width:100%; height:100%; filter:drop-shadow(0 24px 18px rgba(15,27,38,.24));
+               transform:translate(var(--dog-lean-x,0px),var(--dog-lean-y,0px)) rotate(var(--dog-lean-r,0deg));
+               transform-origin:50% 80%; }
   #dogAura { position:absolute; left:16%; right:16%; bottom:7%; height:18%; border-radius:50%;
              background:radial-gradient(ellipse,rgba(95,212,181,.35),rgba(95,212,181,.08) 55%,transparent 72%);
              border:3px solid rgba(95,212,181,.48); transform:perspective(500px) rotateX(68deg); }
@@ -889,6 +893,31 @@ function playSfx(kind) {
   else if (kind==='error') { sfxTone(190,0,.16,'triangle',.025); sfxTone(145,.1,.2,'triangle',.02); }
   else if (kind==='level') { [523,659,784,1047].forEach((f,i)=>sfxTone(f,i*.085,.18,'sine',.045)); }
   else if (kind==='bond') { sfxTone(680,0,.08,'sine',.025); sfxTone(820,.06,.12,'sine',.03); }
+}
+/* 촉각 대체음: 웹에는 촉각 장치가 없으니, 닿는 순간의 톡 소리와 털을 스치는 잡음으로
+   손끝 감각을 청각으로 대신한다. 소리 끔 토글을 그대로 따른다. */
+let sfxNoiseBuf=null;
+function sfxNoise(dur=.14, vol=.03, lo=900, hi=2600){
+  const ac=ensureSfx(); if (!ac) return;
+  if (!sfxNoiseBuf){
+    sfxNoiseBuf=ac.createBuffer(1, Math.floor(ac.sampleRate*.5), ac.sampleRate);
+    const d=sfxNoiseBuf.getChannelData(0);
+    for (let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*.9;
+  }
+  const src=ac.createBufferSource(); src.buffer=sfxNoiseBuf; src.loop=true;
+  const bp=ac.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=(lo+hi)/2;
+  bp.Q.value=Math.max(.4,(lo+hi)/2/Math.max(60,hi-lo));
+  const g=ac.createGain(), at=ac.currentTime;
+  g.gain.setValueAtTime(.0006,at);
+  g.gain.exponentialRampToValueAtTime(Math.max(.0008,vol),at+dur*.28);
+  g.gain.exponentialRampToValueAtTime(.0006,at+dur);
+  src.connect(bp).connect(g).connect(ac.destination); src.start(at); src.stop(at+dur+.02);
+}
+function touchSfx(kind, amt=0){
+  if (!soundOn) return;
+  if (kind==='tap'){ sfxNoise(.09,.026,320,1500); sfxTone(196,0,.07,'sine',.016); }
+  else if (kind==='brush') sfxNoise(.16+amt*.08,.012+amt*.014,1400,3600);   // 털 스치는 소리
+  else if (kind==='purr'){ sfxTone(126,0,.5,'sine',.02+amt*.014); sfxTone(189,.04,.42,'sine',.012); }
 }
 function haptic(pattern) { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch(e) {} }
 function showAction(title, sub='', ms=900) {
@@ -1935,20 +1964,108 @@ let infMs=0, infHz=0, infCount=0, infCountAt=0, infPath='main', e2eMs=0, e2eSrc=
 /* ─── 절대 깊이: worldLandmarks(미터 근사)로 사용자 손 크기를 학습하고, 화면상 손바닥 각크기와
    묶어 "카메라~손 거리"를 근사한다. 손이 크든 작든, 시작 위치가 어디든 첫 프레임부터
    가까이=장면 깊숙이가 성립 → 사전 캘리브레이션이 필요 없다. ─── */
-const HAND_METRIC = { palmM:.085, fovDeg:62 };
+const HAND_METRIC = { palmM:.085, fovDeg:62, zVote:1,
+  /* 기준선별 실측 길이(m) — worldLandmarks로 개인 손에 맞게 각각 학습된다 */
+  seg:{ '0-9':.085, '0-5':.095, '0-17':.082, '5-17':.075 } };
+/* 다중 기준선 [a, b, 기본길이, 최소, 최대] — 한 기준선의 랜드마크 잡음이 깊이를 흔들지 못하게
+   네 개를 각각 재고 중앙값을 쓴다. 손목-중지, 손목-검지, 손목-소지, 손바닥 폭. */
+const HAND_BASELINES = [[0,9,.085,.055,.135],[0,5,.095,.060,.150],
+                        [0,17,.082,.050,.130],[5,17,.075,.045,.120]];
 const HAND_DIST_NEAR=.17, HAND_DIST_FAR=.68;    // 카메라 코앞 ~ 팔 뻗은 거리(m)
+const HAND_FORE_MIN=.42;                        // 회전 보정 하한 (과보정 방지)
+function medianOf(a){ if (!a.length) return null;
+  const s=a.slice().sort((p,q)=>p-q), m=s.length>>1;
+  return (s.length&1) ? s[m] : (s[m-1]+s[m])*.5; }
+/* ─── 정밀 깊이 ①: 평행이동 최소자승 해 (선형 PnP) ───
+   worldLandmarks는 이미 "회전이 반영된" 실측 3D 손 모양(m)이다. 카메라 초점거리를 알고 있으니
+   남은 미지수는 평행이동 (tx,ty,d) 세 개뿐이고, 핀홀 식은 그 셋에 대해 정확히 선형이다.
+       u·(Z+d) = f·(X+tx)   →   u·d − f·tx = f·X − u·Z        (v·d − f·ty = f·Y − v·Z)
+   21점 × 2식 = 42식을 한 번에 풀면 기울기·회전과 무관하게 거리가 나온다. 기준선 비율 방식은
+   손을 기울일 때 원근 때문에 수 cm씩 밀렸는데(측정: 60° 기울임에서 +6cm), 이 해법은 그 편향이
+   원리적으로 없다. 남은 재투영 잔차(px)가 곧 이 프레임 깊이의 신뢰도다. */
+function solveHandDist(lm, wl, vw, vh, focal, zs){
+  let cx=0, cy=0, cz=0, n=0;
+  for (let i=0;i<21;i++){ if (!lm[i]||!wl[i]) continue; cx+=wl[i].x; cy+=wl[i].y; cz+=wl[i].z||0; n++; }
+  if (n<8) return null;
+  cx/=n; cy/=n; cz/=n;
+  let a11=0, a12=0, a13=0, a22=0, a33=0, b1=0, b2=0, b3=0;
+  for (let i=0;i<21;i++){
+    if (!lm[i]||!wl[i]) continue;
+    const u=lm[i].x*vw-vw*.5, v=lm[i].y*vh-vh*.5;
+    const X=wl[i].x-cx, Y=wl[i].y-cy, Z=((wl[i].z||0)-cz)*zs;
+    const c1=focal*X-u*Z, c2=focal*Y-v*Z;
+    a11+=u*u+v*v; a12+=-focal*u; a13+=-focal*v; a22+=focal*focal; a33+=focal*focal;
+    b1+=u*c1+v*c2; b2+=-focal*c1; b3+=-focal*c2;
+  }
+  const r=1e-6*(a11+a22+a33)+1e-9;                    // 미세 릿지 (특이해 방지)
+  const A11=a11+r, A22=a22+r, A33=a33+r;
+  const det=A11*A22*A33 - a12*a12*A33 - a13*a13*A22;  // 대칭 3×3 (a23=0)
+  if (!(Math.abs(det)>1e-12)) return null;
+  const d=(b1*A22*A33 - a12*b2*A33 - a13*A22*b3)/det;
+  if (!Number.isFinite(d) || d<.06 || d>2.4) return null;
+  const tx=(b2-a12*d)/A22, ty=(b3-a13*d)/A33;
+  let se=0, m=0;
+  for (let i=0;i<21;i++){                             // 재투영 잔차 = 이 해를 믿을 수 있는 정도
+    if (!lm[i]||!wl[i]) continue;
+    const u=lm[i].x*vw-vw*.5, v=lm[i].y*vh-vh*.5;
+    const X=wl[i].x-cx, Y=wl[i].y-cy, Z=((wl[i].z||0)-cz)*zs, zc=d+Z;
+    if (zc<.05) return null;
+    const du=focal*(X+tx)/zc-u, dv=focal*(Y+ty)/zc-v;
+    se+=du*du+dv*dv; m++;
+  }
+  return { d, rms:Math.sqrt(se/Math.max(1,m)), n:m };
+}
+/* ─── 정밀 깊이 ②: 폴백 = 초점거리 × 실제 손 길이 × 회전보정 ÷ 화면상 길이 ───
+   worldLandmarks가 없거나 해가 무너진 프레임용. 손을 기울이면 투영 길이가 짧아져
+   "멀어졌다"고 오판하므로, XY평면/3D 길이 비율로 단축을 되돌린 뒤 네 기준선의 중앙값을 쓴다. */
 function depthSignal(lm, wl){
   const vw=video.videoWidth||1280, vh=video.videoHeight||720;
-  if (wl && wl[0] && wl[9]){
-    const pm=Math.hypot(wl[9].x-wl[0].x, wl[9].y-wl[0].y, (wl[9].z||0)-(wl[0].z||0));
-    if (pm>.03 && pm<.18) HAND_METRIC.palmM+=(pm-HAND_METRIC.palmM)*.06;   // 개인 손 크기 학습
-  }
-  const palmPx=Math.hypot((lm[9].x-lm[0].x)*vw, (lm[9].y-lm[0].y)*vh);
-  if (!(palmPx>8)) return null;
   const focal=.5*vw/Math.tan(HAND_METRIC.fovDeg*Math.PI/360);
-  const distM=focal*HAND_METRIC.palmM/palmPx;
+  const ds=[]; let foreSum=0, foreN=0;
+  for (let i=0;i<HAND_BASELINES.length;i++){
+    const a=HAND_BASELINES[i][0], b=HAND_BASELINES[i][1];
+    const def=HAND_BASELINES[i][2], lo=HAND_BASELINES[i][3], hi=HAND_BASELINES[i][4];
+    if (!lm[a] || !lm[b]) continue;
+    const px=Math.hypot((lm[b].x-lm[a].x)*vw, (lm[b].y-lm[a].y)*vh);
+    if (!(px>7)) continue;
+    const key=a+'-'+b;
+    let f=1;
+    if (wl && wl[a] && wl[b]){
+      const dx=wl[b].x-wl[a].x, dy=wl[b].y-wl[a].y, dz=(wl[b].z||0)-(wl[a].z||0);
+      const w3=Math.hypot(dx,dy,dz), wxy=Math.hypot(dx,dy);
+      if (w3>lo && w3<hi) HAND_METRIC.seg[key]+=(w3-HAND_METRIC.seg[key])*.06;  // 개인 손 학습
+      if (w3>lo*.6 && wxy>1e-4) f=Math.max(HAND_FORE_MIN, Math.min(1, wxy/w3)); // 회전 단축 복원
+    }
+    foreSum+=f; foreN++;
+    ds.push(focal*(HAND_METRIC.seg[key]||def)*f/px);
+  }
+  HAND_METRIC.palmM=HAND_METRIC.seg['0-9'];
+  const base = ds.length ? medianOf(ds) : null;
+  // 기준선 간 불일치가 크면 랜드마크가 흔들리는 프레임 → 신뢰도를 낮춰 매핑이 그 값을 덜 믿게 한다
+  let agree=.35;
+  if (base!=null && ds.length>1){
+    let spread=0; for (let i=0;i<ds.length;i++) spread+=Math.abs(ds[i]-base);
+    agree=clamp01(1-(spread/ds.length)/Math.max(.02,base*.20));
+  }
+  /* 선형 PnP 해를 우선 쓴다. z 부호 규약(멀어질수록 +/−)은 구현체마다 다르므로 두 가설을
+     모두 풀어 재투영 잔차가 작은 쪽을 고르고, 프레임마다 뒤집히지 않게 완만히 투표해 고정한다. */
+  let solved=null;
+  if (wl && wl.length>=15 && lm.length>=15){
+    const sp=solveHandDist(lm,wl,vw,vh,focal, 1), sn=solveHandDist(lm,wl,vw,vh,focal,-1);
+    if (sp&&sn) HAND_METRIC.zVote+=((sp.rms<=sn.rms?1:-1)-HAND_METRIC.zVote)*.06;
+    const pick = HAND_METRIC.zVote>=0 ? (sp||sn) : (sn||sp);
+    if (pick && pick.rms < vw*.06) solved=pick;        // 잔차가 화면폭의 6%를 넘으면 해가 무너진 것
+  }
+  let distM, conf, src;
+  if (solved){
+    distM=solved.d; src='pnp';
+    conf=clamp01(1-(solved.rms-1.5)/6);                // 잔차 1.5px→1.0, 7.5px→0
+    if (base!=null && Math.abs(solved.d-base) > Math.max(.10, base*.45)) conf*=.35;
+  } else if (base!=null){ distM=base; src='seg'; conf=agree; }
+  else return null;
   return { distM, zn:clamp01((HAND_DIST_FAR-distM)/(HAND_DIST_FAR-HAND_DIST_NEAR)),
-           personalized:!!(wl&&wl[0]) };
+           personalized:!!(wl&&wl[0]), fore:foreN?foreSum/foreN:1,
+           agree:conf, nb:src==='pnp'?4:ds.length, src, rms:solved?solved.rms:null };
 }
 /* ─── 관절각 보조 분류기: 공식 제스처 점수가 낮아 놓친 프레임을 굽힘·방향으로 직접 판별해
    인식률을 올린다. 공식 결과가 있으면 항상 공식 우선, 3프레임 연속 동일할 때만 채택. ─── */
@@ -2226,7 +2343,16 @@ const hand3dPose = { x:0, y:-1, z:2.4, rz:-.15, curls:{index:.22,middle:.22,ring
 // 어느 층이든 결과는 ratio 하나로 수렴하고, vel(초당 변화율)로 지연 예측 보상을 한다.
 const hand3dDepth = { ratio:.5, min:null, max:null, buf:[], bufN:0,
                       unit:'palm', distM:0, personalized:false, vel:0, lastZn:.5, lastTs:0,
-                      rawDist:null, clampN:0, conf:0, absAt:0 };
+                      rawDist:null, clampN:0, conf:0, absAt:0,
+                      rest:null, qual:.4, frozen:0, fore:1, zn:null, src:'', rms:null };
+/* ─── 고정 물리 매핑 ───
+   예전에는 관측된 최소~최대를 장면 깊이 전체로 늘렸다(스트레치). 감도는 좋았지만 범위가
+   계속 변하니 "같은 자리에 손을 두어도 매번 다른 깊이"가 되어 강아지를 만지는 지점이
+   고정되지 않았다. 이제 전진 거리 30cm를 항상 깊이 전체에 대응시키고, 사람마다 다른
+   '휴식 위치'만 느리게 배운다. 손이 앞쪽(접촉 구간)에 있을 때는 기준을 갱신하지 않으므로
+   쓰다듬는 중에 기준이 밀려나지 않는다. */
+const HAND3D_SPAN_M = .30;                 // 깊이 전체에 대응하는 실제 전진 거리(m)
+const HAND3D_REST_MIN = .26, HAND3D_REST_MAX = .95;   // 휴식(먼 끝) 기준의 허용 범위(m)
 const HAND3D_DEPTH_MIN_SPAN = .04;
 const HAND3D_ABS_MIN_SPAN = .12;          // 절대 깊이: 12cm 이상 왕복하면 개인 도달범위로 스트레치
 const HAND3D_ABS_MAX_SPAN = .62;          // 팔 뻗기 물리 상한 — 이상치가 범위를 늘려 감도를 죽이는 것 방지
@@ -2275,31 +2401,55 @@ function learnDepth(sig, palmLen, ts){
     }
     if (hand3dDepth.unit!=='abs'){ hand3dDepth.min=null; hand3dDepth.max=null; hand3dDepth.buf.length=0; }
     hand3dDepth.unit='abs'; hand3dDepth.absAt=ts; hand3dDepth.rawDist=d; hand3dDepth.distM=Math.round(d*1000)/1000;
-    hand3dDepth.personalized=!!sig.personalized;
-    // 학습에는 포화되지 않는 원거리값(-d: 클수록 가까움)을 쓰고, 매핑 기본값은 절대 거리 정규화.
-    // 이렇게 하면 사용자가 상정 범위 밖에 앉아 있어도 깊이가 한쪽에 붙어버리지 않는다.
-    raw=-d; zn=clamp01((HAND_DIST_FAR-d)/(HAND_DIST_FAR-HAND_DIST_NEAR));
+    hand3dDepth.personalized=!!sig.personalized; hand3dDepth.fore=sig.fore||1;
+    hand3dDepth.src=sig.src||''; hand3dDepth.rms=sig.rms==null?null:sig.rms;
+    // ③ 휴식 기준 학습 — 물러날 땐 0.7초(최대점 추종), 살짝 앞이면 10초, 접촉 구간에선 완전 동결.
+    //    뒤로 물러난 위치가 곧 그 사람의 '휴식 거리'이므로 그쪽으로는 빠르게 잠기는 편이
+    //    기준이 빨리 확정돼(≈2초) 첫 시도부터 같은 자리에서 강아지가 만져진다.
+    const dtb = hand3dDepth.lastTs ? Math.min(.25,Math.max(.012,(ts-hand3dDepth.lastTs)/1000)) : .033;
+    if (!Number.isFinite(hand3dDepth.rest)) hand3dDepth.rest=d;
+    else if (d > hand3dDepth.rest)                          // 뒤로 물러남 = 진짜 휴식 위치 발견 → 빨리 따라감
+      hand3dDepth.rest += (d-hand3dDepth.rest)*(1-Math.exp(-dtb/.7));
+    else if (d > hand3dDepth.rest-HAND3D_SPAN_M*.4)         // 살짝 앞: 아주 느리게만 (접촉 구간은 완전 동결)
+      hand3dDepth.rest += (d-hand3dDepth.rest)*(1-Math.exp(-dtb/10));
+    const far=Math.max(HAND3D_REST_MIN, Math.min(HAND3D_REST_MAX, hand3dDepth.rest));
+    // 카메라에 아주 붙어 앉은 사용자는 30cm를 못 뻗으므로 그때만 폭을 줄인다
+    const span=Math.max(.16, Math.min(HAND3D_SPAN_M, far-HAND3D_DIST_MIN));
+    // ④ 고정 폭 매핑 — 같은 물리 위치는 항상 같은 장면 깊이가 된다(반복 가능)
+    raw=-d; zn=clamp01((far-d)/span);
+    hand3dDepth.min=-far; hand3dDepth.max=-(far-span);
+    const b=hand3dDepth.buf; b.push(raw); if (b.length>DEPTH_BUF_MAX) b.shift();
   } else if (palmLen>.015) {
     // 절대 신호가 잠깐(1초 미만) 끊긴 정도로는 층을 바꾸지 않는다 — 전환 시 범위 재학습으로 깊이가 흔들리므로.
     if (hand3dDepth.unit==='abs' && hand3dDepth.absAt && ts-hand3dDepth.absAt<1000) return;
     if (hand3dDepth.unit!=='palm'){ hand3dDepth.min=null; hand3dDepth.max=null; hand3dDepth.buf.length=0; }
     hand3dDepth.unit='palm'; raw=palmLen;
   } else return;
-  // 적응형 범위 학습은 두 경로 모두에 적용 — 절대 깊이에서도 실사용 도달 범위로 스트레치해
-  // 사람이 실제로 뻗는 만큼이 화면 깊이 전체에 대응하게 한다.
-  depthRangeUpdate(raw);
-  const span=hand3dDepth.max-hand3dDepth.min;
-  if (span>=depthMinSpan()) zn=clamp01((raw-hand3dDepth.min)/span);
-  else if (zn===undefined) zn=.5;                          // 폴백 경로: 범위 학습 전 중립
-  hand3dDepth.conf=clamp01(span/(hand3dDepth.unit==='abs'?.24:.08));   // 범위 학습 성숙도
+  if (hand3dDepth.unit==='abs'){
+    // 신뢰도: PnP는 재투영 잔차, 폴백은 기준선 간 일치도 = 이 프레임의 깊이를 믿을 수 있는 정도
+    const q=clamp01((sig && sig.agree!=null ? sig.agree : .35)*(sig && sig.nb>=3 ? 1 : .7));
+    hand3dDepth.qual+=(q-hand3dDepth.qual)*.2;
+  } else {
+    // 폴백(손바닥 비율): 물리 단위가 없으므로 기존 백분위 범위 학습을 그대로 쓴다
+    depthRangeUpdate(raw);
+    const sp=hand3dDepth.max-hand3dDepth.min;
+    if (sp>=depthMinSpan()) zn=clamp01((raw-hand3dDepth.min)/sp);
+    else if (zn===undefined) zn=.5;                        // 범위 학습 전 중립
+    hand3dDepth.qual+=(clamp01(sp/.08)-hand3dDepth.qual)*.2;
+  }
+  hand3dDepth.conf=hand3dDepth.qual;
   const prevRatio=hand3dDepth.ratio;
-  hand3dDepth.ratio+=(zn-hand3dDepth.ratio)*.45;           // 저역 필터 (감도↑)
+  // 신뢰도 게이팅: 랜드마크가 흔들리는 프레임은 천천히만 반영하고, 무너진 프레임은 아예 동결한다.
+  // (틀린 깊이를 보여주는 것보다 잠깐 멈추는 편이 "만지는 느낌"을 훨씬 덜 깨뜨린다)
+  const kD=hand3dDepth.unit==='abs' ? .14+.36*hand3dDepth.qual : .45;
+  if (hand3dDepth.qual>.10 || hand3dDepth.unit!=='abs') hand3dDepth.ratio+=(zn-hand3dDepth.ratio)*kD;
+  else hand3dDepth.frozen++;
   if (hand3dDepth.lastTs){
     const dts=Math.max(.012,(ts-hand3dDepth.lastTs)/1000);
     const v=(hand3dDepth.ratio-prevRatio)/dts;
     hand3dDepth.vel+=(v-hand3dDepth.vel)*.35;              // 깊이 속도(지연 예측용)
   }
-  hand3dDepth.lastZn=zn; hand3dDepth.lastTs=ts;
+  hand3dDepth.zn=zn; hand3dDepth.lastZn=zn; hand3dDepth.lastTs=ts;
 }
 // ─── 손 3D 자세 (손날·손등↔손바닥 뒤집기 인식) ───
 // 랜드마크의 미러보정 x·y + MediaPipe 상대 z로 손 기저(위·가로·법선)를 만들어
@@ -2307,6 +2457,42 @@ function learnDepth(sig, palmLen, ts){
 const HAND3D_FLIP_FOR = 'Left';           // 가로축 반전 기준 손 (실사용 확인으로 확정: 2026-07-23)
 const hand3dQDev = new THREE.Quaternion();
 let hand3dContact=false, hand3dTouchFxAt=0;   // 강아지 접촉 상태 · 촉감 피드백 쿨다운
+/* ─── 접촉·쓰다듬기 (블랙앤화이트식 손맛) ───
+   ① 강아지를 머리/몸통 두 개의 화면상 곡면으로 모델링해 손이 표면을 따라 미끄러지게 한다.
+   ② 진입/이탈 임계값을 달리 둔 히스테리시스로 접촉이 깜빡이지 않게 한다.
+   ③ 좌우 왕복(방향 전환 2회 이상)을 '쓰다듬기'로 판정해 petMeter를 적립하고,
+      그 값이 꼬리·기댐·표정·하트로 점진적으로 번지게 한다. */
+const hand3dTouch = { strength:0, prox:0, pet:0, strokes:0, dirX:0, revAt:0, lastX:0,
+                      cx:0, cy:0, nx:0, ny:-1, sd:0, part:'', press:0,
+                      tapAt:0, heartAt:0, purrAt:0 };
+let handTouchShadow=null;                     // 강아지 몸에 지는 손 그림자 (가장 강한 깊이 단서)
+/* 강아지 표면(화면 좌표): 스프라이트 사각형에서 머리 원 + 몸통 타원을 유도한다 */
+function dogSurface(){
+  if (dogSpriteReady){
+    const r=$('dogSpriteWrap').getBoundingClientRect();
+    return { head:{ x:r.left+r.width*.5, y:r.top+r.height*.36, r:Math.max(34,r.width*.235) },
+             body:{ x:r.left+r.width*.5, y:r.top+r.height*.68, rx:Math.max(38,r.width*.30),
+                    ry:Math.max(28,r.height*.20) } };
+  }
+  const p=dogScreenPos(), b=dogBase();
+  return { head:{ x:p.x, y:p.y, r:Math.max(34,b.r*.8) },
+           body:{ x:b.x, y:b.y-b.r*.5, rx:b.r, ry:b.r*.7 } };
+}
+/* 손 화면좌표 → 가장 가까운 표면점·법선·부호거리(음수=파고듦) */
+function dogSurfaceHit(hx, hy){
+  const s=dogSurface();
+  const hdx=hx-s.head.x, hdy=hy-s.head.y, hd=Math.hypot(hdx,hdy)||1e-4;
+  const hSd=hd-s.head.r;
+  const bdx=(hx-s.body.x)/s.body.rx, bdy=(hy-s.body.y)/s.body.ry;
+  const bk=Math.hypot(bdx,bdy)||1e-4;
+  const bSd=(bk-1)*Math.min(s.body.rx,s.body.ry);          // 타원 근사 부호거리
+  if (hSd<=bSd) return { part:'head', sd:hSd, r:s.head.r,
+                         nx:hdx/hd, ny:hdy/hd, sx:s.head.x+hdx/hd*s.head.r, sy:s.head.y+hdy/hd*s.head.r };
+  const nlen=Math.hypot(bdx/s.body.rx, bdy/s.body.ry)||1e-4;
+  return { part:'body', sd:bSd, r:Math.min(s.body.rx,s.body.ry),
+           nx:(bdx/s.body.rx)/nlen, ny:(bdy/s.body.ry)/nlen,
+           sx:s.body.x+bdx/bk*s.body.rx, sy:s.body.y+bdy/bk*s.body.ry };
+}
 const _hq = { m:new THREE.Matrix4(), q:new THREE.Quaternion(), e:new THREE.Euler(), id:new THREE.Quaternion() };
 function handOrientTarget(qOut){
   const snap=handSnap;
@@ -2347,6 +2533,16 @@ try {
   shCtx.fillStyle=sg; shCtx.fillRect(0,0,128,128);
   handShadow=new THREE.Sprite(new THREE.SpriteMaterial({ map:new THREE.CanvasTexture(shCv), transparent:true, depthWrite:false }));
   hand3dShadowScene.add(handShadow);
+  // 접촉 그림자: 멀면 크고 흐리게, 가까우면 작고 진하게 — 사람이 깊이를 눈으로 읽는 제1단서
+  const csCv=document.createElement('canvas'); csCv.width=csCv.height=128;
+  const csCtx=csCv.getContext('2d');
+  const cg=csCtx.createRadialGradient(64,64,3,64,64,62);
+  cg.addColorStop(0,'rgba(22,34,42,.66)'); cg.addColorStop(.5,'rgba(22,34,42,.3)');
+  cg.addColorStop(1,'rgba(22,34,42,0)');
+  csCtx.fillStyle=cg; csCtx.fillRect(0,0,128,128);
+  handTouchShadow=new THREE.Sprite(new THREE.SpriteMaterial({ map:new THREE.CanvasTexture(csCv), transparent:true, depthWrite:false }));
+  handTouchShadow.material.opacity=0;
+  hand3dShadowScene.add(handTouchShadow);
 } catch(e) { hand3dRenderer=null; console.warn('3D 손 렌더러 초기화 실패 — 2D 손 폴백', e); }
 function sizeHand3d(){
   if (!hand3dRenderer) return;
@@ -2419,6 +2615,22 @@ function hand3dWorldFromScreen(nx, ny, z){
 }
 function drawHandOverlay2D(actual, sx, sy){
   if (!actual) return;
+  // 근접 링: 강아지 표면까지 얼마나 남았는지를 눈으로 알려준다. 닿으면 링이 표면에 딱 붙는다.
+  const T=hand3dTouch;
+  if (T.prox>.06){
+    const p=T.prox, rr=Math.max(12,44-p*26)+(1-p)*10;
+    virtualHandCtx.save();
+    virtualHandCtx.beginPath(); virtualHandCtx.arc(T.cx,T.cy,rr,0,Math.PI*2);
+    virtualHandCtx.strokeStyle=`rgba(255,214,150,${(.10+p*.45).toFixed(3)})`;
+    virtualHandCtx.lineWidth=1.5+p*2.2; virtualHandCtx.stroke();
+    if (T.strength>.25){        // 접촉 순간의 짧은 파문
+      const g=T.strength;
+      virtualHandCtx.beginPath(); virtualHandCtx.arc(T.cx,T.cy,rr*(1+ (1-g)*.5),0,Math.PI*2);
+      virtualHandCtx.strokeStyle=`rgba(255,255,255,${(g*.3).toFixed(3)})`;
+      virtualHandCtx.lineWidth=1.2; virtualHandCtx.stroke();
+    }
+    virtualHandCtx.restore();
+  }
   const ringX=sx, ringY=sy-44;
   virtualHandCtx.save();
   if (handSnap?.known && (handSnap.hold||0)>0){
@@ -2438,6 +2650,71 @@ function drawHandOverlay2D(actual, sx, sy){
     virtualHandCtx.strokeStyle=`rgba(101,205,181,${.3+pulse*.4})`; virtualHandCtx.lineWidth=2.5; virtualHandCtx.stroke();
   }
   virtualHandCtx.restore();
+}
+/* ─── 손맛 처리: 접촉 그림자 · 쓰다듬기 적립 · 강아지 반응 · 촉각 대체 신호 ───
+   깊이를 "보이게"(그림자·근접링) 하고 "붙게"(히스테리시스·슬라이딩) 한 뒤,
+   쓰다듬는 왕복 동작에만 반응을 주면 마우스가 아니라 손으로 만지는 감각이 된다. */
+function tickTouchFeel(dt, live){
+  const T=hand3dTouch, now=performance.now();
+  if (!live){                                  // 추적이 끊기면 접촉·근접은 즉시 풀린다
+    T.strength+=(0-T.strength)*(1-Math.exp(-dt*7));
+    T.prox+=(0-T.prox)*(1-Math.exp(-dt*7));
+    hand3dContact=T.strength>.45;
+  }
+  if (T.strength>.45){
+    // 쓰다듬기 판정: 좌우 방향 전환이 2회 이상이어야 '쓰다듬는 중'으로 본다 (단순 접근과 구분)
+    const dx=simHandDraw.x-T.lastX;
+    if (Math.abs(dx)>1.4){
+      const dir=dx>0?1:-1;
+      if (T.dirX && dir!==T.dirX && now-T.revAt>170){ T.strokes++; T.revAt=now; }
+      T.dirX=dir;
+    }
+    const lat=Math.min(700,simHandDraw.speed);
+    T.pet=clamp01(T.pet+dt*(lat/430)*(T.strokes>=2?1:.3)*T.strength);
+    T.press+=(clamp01(lat/500)-T.press)*(1-Math.exp(-dt*5));
+  } else {
+    T.pet=Math.max(0,T.pet-dt*.20);
+    T.press+=(0-T.press)*(1-Math.exp(-dt*3));
+    if (now-T.revAt>1500){ T.strokes=0; T.dirX=0; }
+  }
+  T.lastX=simHandDraw.x;
+  // ① 접촉 그림자 — 강아지 몸 위에 진다. 멀면 크고 흐리게, 닿으면 작고 진하게.
+  if (handTouchShadow){
+    const m=handTouchShadow.material, p=T.prox;
+    if (p>.012){
+      const zP=.95, off=(1-p)*26;
+      const wl=hand3dWorldFromScreen((simHandDraw.x+off*.6)/innerWidth,
+                                     (simHandDraw.y+off)/innerHeight, zP);
+      handTouchShadow.position.set(wl.x, wl.y, zP);
+      const sc=.8+(1-p)*1.6;
+      handTouchShadow.scale.set(sc*1.2, sc*.85, 1);
+      m.opacity=(.14+.5*p)*handPresence;
+    } else m.opacity=0;
+  }
+  // ② 강아지 반응 점진화 — 쓰다듬을수록 꼬리 → 기댐 → 표정 순으로 살아난다
+  const pet=T.pet;
+  if (T.strength>.35){
+    wagPower=Math.max(wagPower,.28+pet*.72);
+    if (pet>.22) earPerk=Math.max(earPerk,.3+pet*.5);
+    // 훈련 중 자세(앉기·엎드리기 등)는 건드리지 않고, 대기 자세일 때만 기뻐하는 표정으로
+    if (pet>.55 && (dogSpritePose==='stand'||dogSpritePose==='attentive')) setDogSpritePose('happy');
+  }
+  const leanK=T.strength*(.35+pet*.65), st=document.body.style;
+  st.setProperty('--dog-lean-x',`${(T.nx*9*leanK).toFixed(2)}px`);
+  st.setProperty('--dog-lean-y',`${(T.ny*7*leanK+T.press*2).toFixed(2)}px`);
+  st.setProperty('--dog-lean-r',`${(T.nx*2*leanK).toFixed(2)}deg`);
+  // ③ 하트: 쓰다듬기가 성립한 뒤에만, 누적될수록 자주 (단순 접촉으로는 나오지 않는다)
+  if (T.strength>.45 && T.strokes>=2 && now-T.heartAt>(pet>.72?520:pet>.42?820:1250)){
+    T.heartAt=now; emit('heart', T.cx, T.cy-26, pet>.7?4:2);
+  }
+  // ④ 촉각 대체 피드백 — 닿는 순간 톡, 스치는 동안 털 소리, 오래 쓰다듬으면 만족 호흡
+  const isOn=T.strength>.45;
+  if (isOn && !T._on){ touchSfx('tap'); haptic([12]); hand3dTouchFxAt=now; }
+  T._on=isOn;
+  if (isOn && T.strokes>=1 && simHandDraw.speed>120 && now-T.tapAt>Math.max(160,420-pet*220)){
+    T.tapAt=now; touchSfx('brush',pet);
+  }
+  if (isOn && pet>.6 && now-T.purrAt>1800){ T.purrAt=now; touchSfx('purr',pet); haptic([8,70,8]); }
 }
 function tickHand3D(dt){
   const hand=currentSimulationHand();
@@ -2465,17 +2742,25 @@ function tickHand3D(dt){
       const magnet=clamp01((znRaw-.5)/.5)*.4;
       nx+=(dp.x/innerWidth-nx)*magnet;
       ny+=(dp.y/innerHeight-ny)*magnet;
-      // ★접촉: 충분히 깊이 + 강아지 반경 안이면 손이 강아지 표면에서 멈춘다 (통과 방지)
-      const db=dogBase();
-      const distDog=Math.hypot(simHandDraw.x-dp.x, simHandDraw.y-dp.y);
-      hand3dContact = znRaw>.74 && distDog<Math.max(130,db.r*1.15);
-      if (hand3dContact){
-        targetZ=Math.max(targetZ,1.0)+Math.sin(restBob*6.5)*.035;   // 표면 정지 + 쓰다듬는 미세 결
-        // 쓰다듬는 움직임(속도 有)일 때만 촉감 피드백 하트
-        if (performance.now()-hand3dTouchFxAt>650 && simHandDraw.speed>140){
-          hand3dTouchFxAt=performance.now();
-          emit('heart', simHandDraw.x, simHandDraw.y-24, 3);
-        }
+      // ★접촉: 강아지 곡면(머리·몸통)에 닿으면 표면을 따라 미끄러지며 멈춘다 (통과 방지)
+      const hx=nx*innerWidth, hy=ny*innerHeight;
+      const hit=dogSurfaceHit(hx,hy);
+      const T=hand3dTouch;
+      T.part=hit.part; T.sd=hit.sd; T.nx=hit.nx; T.ny=hit.ny; T.cx=hit.sx; T.cy=hit.sy;
+      // 근접도 = 깊이로 다가온 정도 × 강아지를 조준한 정도 → 그림자·근접링의 강도
+      T.prox=clamp01((znRaw-.46)/.30)*clamp01(1-hit.sd/Math.max(40,hit.r*1.5));
+      // 히스테리시스: 붙을 땐 좁게, 떨어질 땐 넓게 판정해 경계에서 깜빡이지 않게 한다
+      const on=T.strength>.45;
+      const want = hit.sd < hit.r*(on?.44:.10) && znRaw > (on?.62:.71);
+      T.strength+=((want?1:0)-T.strength)*(1-Math.exp(-Math.max(.001,dt)*(want?15:6)));
+      hand3dContact = T.strength>.45;
+      if (T.strength>.02){
+        // 윤곽 슬라이딩: 파고든 만큼 표면 법선으로 되밀어 강아지 안으로 들어가지 않게 한다
+        const push=Math.max(0,-hit.sd)*T.strength;
+        nx=(hx+hit.nx*push)/innerWidth; ny=(hy+hit.ny*push)/innerHeight;
+        // 표면 정지 + 털에 눌리는 미세한 결
+        targetZ=targetZ+(Math.max(targetZ,1.02)-targetZ)*T.strength
+                +Math.sin(restBob*6.2)*.03*T.strength;
       }
     } else {
       targetZ=2.5+Math.sin(restBob*1.3)*.06;                   // 시연 모드: 중간 깊이
@@ -2517,6 +2802,9 @@ function tickHand3D(dt){
     hand3dRoot.quaternion.setFromEuler(_hq.e).premultiply(hand3dQDev);
     for (const m of hand3dMats) m.opacity=hand3dOpacity*handPresence;
     for (const f of Object.keys(hand3dPose.curls)) applyFingerCurl(f,hand3dPose.curls[f]);
+    // 접촉 스쿼시: 손바닥 법선(로컬 z) 방향으로 눌리고 옆으로 살짝 퍼진다 → "닿았다"는 감각
+    const e=hand3dTouch.strength*(.05+hand3dTouch.press*.06);
+    hand3dRoot.scale.set(1+e*.55, 1+e*.55, 1-e);
   }
   if (handShadow){
     const floorY=-w.halfH*.8;
@@ -2530,6 +2818,7 @@ function tickHand3D(dt){
   simHandDraw.speed=Math.hypot(sx-simHandDraw.x,sy-simHandDraw.y)/Math.max(.008,dt);
   simHandDraw.x=sx; simHandDraw.y=sy;
   simHandDraw.size=Math.max(210,Math.min(620,(handTrack.extent||260)*2.15));
+  tickTouchFeel(dt, tracking && !!hand.actual);
   hand3dRenderer.clear(true,true,true);
   hand3dRenderer.render(hand3dShadowScene,hand3dCam);
   hand3dScene.overrideMaterial=hand3dPrepass;      // 깊이 선행 패스 → 내부 겹침 제거
@@ -3069,13 +3358,18 @@ window.__MUNG__ = {
       personalized:hand3dDepth.personalized, depthVel:Math.round((hand3dDepth.vel||0)*100)/100,
       depthConf:Math.round((hand3dDepth.conf||0)*100)/100, depthClamped:hand3dDepth.clampN,
       depthSamples:hand3dDepth.buf.length,
+      restM:hand3dDepth.rest==null?null:Math.round(hand3dDepth.rest*100)/100,
+      fore:Math.round((hand3dDepth.fore||1)*100)/100, depthFrozen:hand3dDepth.frozen,
+      depthSrc:hand3dDepth.src||'', depthRms:hand3dDepth.rms==null?null:Math.round(hand3dDepth.rms*10)/10,
+      znRaw:hand3dDepth.zn==null?null:Math.round(hand3dDepth.zn*1000)/1000,
       yawDeg:Math.round(new THREE.Euler().setFromQuaternion(hand3dQDev,'YXZ').y*180/Math.PI),
-      contact:hand3dContact,
+      contact:hand3dContact, contactStrength:Math.round(hand3dTouch.strength*100)/100,
+      petMeter:Math.round(hand3dTouch.pet*100)/100, strokes:hand3dTouch.strokes,
       curls:Object.fromEntries(Object.entries(hand3dPose.curls).map(([k,v])=>[k,Math.round(v*100)/100])) },
     handRealtime:{ presence:Math.round(handPresence*100)/100, tracking:!!currentSimulationHand(),
       curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate,
       infPath, infHz, infMs, e2eMs:Math.round(e2eMs), e2eSrc,
-      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v7-webmax-3' },
+      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v8-touch-1' },
     simulation:{phase:simExperience.phase,state:simulationCopy().state,trust:Math.round(simExperience.trust),
       completed:simExperience.completed,manual:simExperience.manual,handVisible:!!currentSimulationHand(),cameraVisible:false},
     online:navigator.onLine, fps:fpsNow, webglReady, eventCount:eventLog.length
