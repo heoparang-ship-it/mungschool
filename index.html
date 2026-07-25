@@ -444,6 +444,24 @@
   }
   #simSensorLine::before { content:''; display:inline-block; width:7px; height:7px; margin-right:7px; border-radius:50%; background:#e6b45d; box-shadow:0 0 0 4px rgba(230,180,93,.16); }
   body.sensorActive #simSensorLine::before { background:var(--sim-mint); box-shadow:0 0 0 4px rgba(101,205,181,.16); }
+  /* 3초 손바닥 동기화 오버레이 — 목표 원(점선)에 내 손바닥 원(실선)을 겹치면 채워진다 */
+  #palmSync { position:fixed; z-index:19; transform:translate(-50%,-50%); pointer-events:none; }
+  #palmSync svg { width:100%; height:100%; display:block; overflow:visible; }
+  #palmSync .psTarget { fill:none; stroke:rgba(255,255,255,.9); stroke-width:2.2; stroke-dasharray:7 7;
+    filter:drop-shadow(0 1px 3px rgba(40,80,70,.45)); }
+  #palmSync .psLive { fill:rgba(101,205,181,.09); stroke:var(--sim-mint,#65cdb5); stroke-width:3.4;
+    transition:stroke .18s linear; }
+  #palmSync.ok .psLive { stroke:#4fd6a9; stroke-width:4.6; }
+  #palmSync .psArc { fill:none; stroke:#4fd6a9; stroke-width:5; stroke-linecap:round;
+    transform:rotate(-90deg); transform-origin:60px 60px; }
+  #palmSyncHint { position:absolute; left:50%; top:calc(100% + 12px); transform:translateX(-50%);
+    white-space:nowrap; padding:9px 17px; border-radius:999px; font-size:12px; font-weight:900;
+    color:#2e6158; background:rgba(255,255,255,.9); border:1px solid rgba(80,169,146,.3);
+    box-shadow:0 10px 30px rgba(70,107,97,.16); backdrop-filter:blur(12px); }
+  #palmSyncSkip { position:absolute; left:50%; top:calc(100% + 52px); transform:translateX(-50%);
+    pointer-events:auto; cursor:pointer; padding:6px 14px; border-radius:999px; font-size:10px;
+    font-weight:900; color:#7e9d96; background:rgba(255,255,255,.72);
+    border:1px solid rgba(80,169,146,.22); backdrop-filter:blur(10px); }
   #simProgress {
     position:fixed; z-index:18; right:28px; top:22px; display:flex; align-items:center; gap:7px;
     padding:9px 12px; border-radius:17px; color:#7e9d96; background:rgba(255,255,255,.73);
@@ -534,6 +552,15 @@
 </div>
 <div id="simDogState" role="status" aria-live="polite">경계</div>
 <div id="simInstruction" role="status" aria-live="polite">50cm 시작선에서 잠시 멈춰 주세요</div>
+<div id="palmSync" role="status" aria-live="polite" hidden>
+  <svg viewBox="0 0 120 120" aria-hidden="true">
+    <circle class="psArc" cx="60" cy="60" r="58"></circle>
+    <circle class="psTarget" cx="60" cy="60" r="52"></circle>
+    <circle class="psLive" cx="60" cy="60" r="52"></circle>
+  </svg>
+  <b id="palmSyncHint">손바닥을 원에 맞춰 주세요</b>
+  <button id="palmSyncSkip" type="button">건너뛰기</button>
+</div>
 <div id="simPrivacy">카메라는 인식에만 사용 · 원본 저장 0</div>
 <canvas id="hand3d" aria-label="실시간 3D 손"></canvas>
 <canvas id="virtualHand" aria-label="실시간으로 인식된 1인칭 손"></canvas>
@@ -1865,6 +1892,7 @@ async function useCameraMode() {
   await startAudioMeter();
   startVoice();
   beginSimulation(false);
+  palmSyncStart();                    // 손바닥 3초 동기화로 '닿는 지점'을 먼저 못 박는다
   toast('가상훈련을 시작합니다.');
 }
 
@@ -1889,9 +1917,14 @@ const wantGpu = new URLSearchParams(location.search).get('delegate')==='gpu';
   try {
     const fs = await FilesetResolver.forVisionTasks(VISION_URLS.wasm);
     // GPU 추론 우선 시도 → 미지원 기기는 CPU 자동 폴백 (추론 시간 단축 = 히치 제거)
+    /* 인식 임계값을 기본 .5에서 .3으로 내린다 — 실내 조명·역광·손이 일부만 보이는 프레임에서
+       기본값은 손을 통째로 버려서 "추적이 뚝뚝 끊긴다". 낮춘 만큼 늘어나는 오검출은
+       One-Euro 필터 + 3프레임 연속 동의 제스처 투표가 이미 걸러낸다. 존재 임계값을 더 낮게
+       두는 이유: 한 번 잡은 손을 놓치지 않는 것이 새로 잡는 것보다 체감상 훨씬 중요하다. */
     const makeGesture = delegate => GestureRecognizer.createFromOptions(fs, {
       baseOptions: { modelAssetPath: VISION_URLS.gesture, delegate },
-      runningMode: 'VIDEO', numHands: 1 });
+      runningMode: 'VIDEO', numHands: 1,
+      minHandDetectionConfidence: .3, minHandPresenceConfidence: .25, minTrackingConfidence: .25 });
     // CPU 추론 우선: 3D 손 + 강아지 두 WebGL 컨텍스트와 GPU 자원 경합을 피해 인식 안정화.
     // (GPU delegate는 create는 성공해도 프레임 단위로 조용히 실패해 인식이 끊기는 사례가 있음)
     // 기본 CPU (WebGL 경합 회피 검증됨) · ?delegate=gpu 로 GPU A/B 테스트 가능
@@ -2033,7 +2066,10 @@ function depthSignal(lm, wl){
     if (wl && wl[a] && wl[b]){
       const dx=wl[b].x-wl[a].x, dy=wl[b].y-wl[a].y, dz=(wl[b].z||0)-(wl[a].z||0);
       const w3=Math.hypot(dx,dy,dz), wxy=Math.hypot(dx,dy);
-      if (w3>lo && w3<hi) HAND_METRIC.seg[key]+=(w3-HAND_METRIC.seg[key])*.06;  // 개인 손 학습
+      // 동기화 3초 동안은 사용자가 일부러 손을 고정해 주는 구간이므로 이득을 3배로 올려
+      // 개인 손 치수를 그 자리에서 수렴시킨다 (평소엔 오검출에 끌려가지 않게 낮게 유지)
+      const kSeg = palmSync.phase==='run' ? .18 : .06;
+      if (w3>lo && w3<hi) HAND_METRIC.seg[key]+=(w3-HAND_METRIC.seg[key])*kSeg;  // 개인 손 학습
       if (w3>lo*.6 && wxy>1e-4) f=Math.max(HAND_FORE_MIN, Math.min(1, wxy/w3)); // 회전 단축 복원
     }
     foreSum+=f; foreN++;
@@ -2174,7 +2210,8 @@ self.onmessage = async (e) => {
       const M = await import('${VISION_URLS.bundle}');
       const fs = await M.FilesetResolver.forVisionTasks(d.wasm);
       const make = delegate => M.GestureRecognizer.createFromOptions(fs, {
-        baseOptions:{ modelAssetPath:d.model, delegate }, runningMode:'VIDEO', numHands:1 });
+        baseOptions:{ modelAssetPath:d.model, delegate }, runningMode:'VIDEO', numHands:1,
+        minHandDetectionConfidence:.3, minHandPresenceConfidence:.25, minTrackingConfidence:.25 });
       try { rec = await make(d.delegate); }
       catch(err){ rec = await make(d.delegate==='GPU'?'CPU':'GPU'); }
       self.postMessage({ type:'ready' });
@@ -2412,6 +2449,11 @@ function learnDepth(sig, palmLen, ts){
       hand3dDepth.rest += (d-hand3dDepth.rest)*(1-Math.exp(-dtb/.7));
     else if (d > hand3dDepth.rest-HAND3D_SPAN_M*.4)         // 살짝 앞: 아주 느리게만 (접촉 구간은 완전 동결)
       hand3dDepth.rest += (d-hand3dDepth.rest)*(1-Math.exp(-dtb/10));
+    /* 3초 동기화를 마쳤으면 기준점이 그 아래로는 내려가지 못하게 바닥을 깐다.
+       (내려가면 동기화한 자세에서 더 이상 닿지 않게 되고, 그게 바로 사람이
+        '추적이 안 된다'고 느끼는 증상이다. 위로 자라는 건 그대로 허용.) */
+    if (palmSync.done && palmSync.restLo!=null && hand3dDepth.rest<palmSync.restLo)
+      hand3dDepth.rest=palmSync.restLo;
     const far=Math.max(HAND3D_REST_MIN, Math.min(HAND3D_REST_MAX, hand3dDepth.rest));
     // 카메라에 아주 붙어 앉은 사용자는 30cm를 못 뻗으므로 그때만 폭을 줄인다
     const span=Math.max(.16, Math.min(HAND3D_SPAN_M, far-HAND3D_DIST_MIN));
@@ -2493,6 +2535,153 @@ function dogSurfaceHit(hx, hy){
            nx:(bdx/s.body.rx)/nlen, ny:(bdy/s.body.ry)/nlen,
            sx:s.body.x+bdx/bk*s.body.rx, sy:s.body.y+bdy/bk*s.body.ry };
 }
+/* ─── 3초 손바닥 동기화 (허파랑 제안, 2026-07-25) ───
+   깊이 계산 자체는 선형 PnP로 정확해졌지만, "내 손이 지금 강아지에게 얼마나 가까운지"의
+   기준점(rest)은 여전히 사용자가 앞뒤로 움직여 주는 걸 기다려서 배운다. 그래서 처음 몇 초는
+   손이 있어도 만져지지 않고, 사람은 그걸 '추적이 안 된다'고 느낀다.
+   해결: 강아지 머리 위에 목표 원을 띄우고 손바닥 크기를 그 원에 맞춰 3초 유지하게 한다.
+   그 3초 동안
+     ① 손바닥 실측 길이(worldLandmarks)를 빠른 이득으로 개인 손에 수렴시키고,
+     ② 그 자세에서의 실측 거리를 중앙값으로 확정해 '닿는 지점'으로 못 박고,
+     ③ 인식률·신뢰도를 실측해 무엇이 문제인지 진단값으로 남긴다.
+
+   목표 원의 크기는 어떻게 정하나 — 처음엔 강아지 머리 크기에 비례시켰지만, 그러면
+   "그 원에 맞는 손바닥 거리"가 화면 크기와 강아지 크기에 따라 89cm처럼 팔이 닿지도 않는
+   값이 될 수 있다(실측으로 확인). 그래서 원 크기를 광학에서 역산한다:
+     화면상 손바닥 길이 × 실측 거리 = 초점거리 × 실제 손바닥 길이 = 상수(kPx)
+   이 상수는 매 프레임 측정할 수 있으므로, 목표 반지름 = kPx / (원하는 거리)로 두면
+   원은 정확히 "PALMSYNC_DIST_M 만큼 떨어진 손바닥"의 크기가 된다. 즉 ratio = 목표거리/실측거리 —
+   원을 맞추는 행위가 곧 정해진 물리 거리에 손을 두는 행위가 된다. 화면·카메라·손 크기가
+   달라도 성립한다. 위치는 여전히 강아지 머리에 두어 '어디로 손을 뻗어야 하는지'를 가르친다.
+   그 거리에 못 미치는 자리에 앉은 사람(노트북에 아주 붙어 앉은 경우)을 위해 7초가 지나도
+   한 번도 못 맞췄으면 목표 거리를 그 사람이 실제로 낸 거리로 조용히 옮긴다.
+   실패해도 16초 뒤 조용히 넘어가고 기존 자동 학습으로 돌아간다(시연이 멈추면 안 되므로). */
+const PALMSYNC_SEC = 3.0, PALMSYNC_TOL = .12, PALMSYNC_ZN = .82, PALMSYNC_TIMEOUT = 16000;
+const PALMSYNC_DIST_M = .42;          // 앉아서 편하게 뻗는 거리 (성인 기준 중간값)
+const PALMSYNC_ADAPT_MS = 7000;       // 이 시간까지 한 번도 못 맞추면 목표 거리를 사람에게 맞춘다
+const palmSync = { phase:'idle', t:0, ratio:0, matched:false, hint:'', startAt:0, lastAt:0, doneAt:0,
+                   calM:null, restLo:null, restHi:null, done:false, sd:[], det:0, tot:0, report:null,
+                   dx:null, dy:null, tr:null, kPx:null, aim:PALMSYNC_DIST_M, adapted:false, seen:[] };
+function palmSyncStart(){
+  palmSync.phase='wait'; palmSync.t=0; palmSync.sd.length=0; palmSync.det=0; palmSync.tot=0;
+  palmSync.done=false; palmSync.calM=null; palmSync.restLo=null; palmSync.restHi=null;
+  palmSync.report=null; palmSync.startAt=0; palmSync.lastAt=0; palmSync.hint='';
+  palmSync.aim=PALMSYNC_DIST_M; palmSync.adapted=false; palmSync.seen.length=0;
+}
+function palmSyncFinish(ok){
+  palmSync.phase='done'; palmSync.doneAt=performance.now();
+  const el=$('palmSync'); if (el) el.hidden=true;
+  if (!ok || palmSync.sd.length<6){ palmSync.report={ ok:false, reason:ok?'표본 부족':'건너뜀',
+    detRate:palmSync.tot?+(palmSync.det/palmSync.tot).toFixed(2):0 }; return; }
+  const calM=medianOf(palmSync.sd.slice());
+  palmSync.calM=calM; palmSync.done=true;
+  // 이 자세가 zn=0.82 (닿는 문턱 바로 안쪽) → 기준점을 역산해 못 박는다
+  hand3dDepth.rest=calM+PALMSYNC_ZN*HAND3D_SPAN_M;
+  /* 이후 자동 학습에는 '바닥'만 깔아 준다(위쪽은 열어 둔다).
+     아래로 내려가는 것 = 사람이 가르쳐 준 닿는 지점을 잃는 것이므로 막는다. 바닥값은
+     접촉 진입 문턱(zn .71) 바로 위로 잡아, 동기화한 그 자세면 언제든 닿는 것을 보장한다.
+     위로 자라는 것 = 사람이 정말로 뒤로 물러앉은 것이므로 기존 학습에 맡긴다. */
+  palmSync.restLo=calM+.72*HAND3D_SPAN_M; palmSync.restHi=HAND3D_REST_MAX;
+  palmSync.report={ ok:true, calM:Math.round(calM*1000)/1000, n:palmSync.sd.length,
+                    detRate:palmSync.tot?+(palmSync.det/palmSync.tot).toFixed(2):0,
+                    palmM:Math.round(HAND_METRIC.seg['0-9']*1000)/1000,
+                    aimM:Math.round(palmSync.aim*1000)/1000, adapted:palmSync.adapted,
+                    conf:Math.round(hand3dDepth.qual*100)/100, src:hand3dDepth.src };
+  toast('손 동기화 완료 — 이제 손을 앞으로 내밀면 만져져요');
+}
+/* 목표 원: 위치는 강아지 머리, 크기는 "목표 거리에서의 손바닥 길이"를 광학에서 역산한 값.
+   kPx(=화면px×미터)를 아직 못 재면 머리 크기로 임시 표시하되 판정은 하지 않는다. */
+function palmSyncTarget(){
+  const s=dogSurface();
+  const r = palmSync.kPx ? palmSync.kPx/Math.max(.12, palmSync.aim) : Math.max(38, s.head.r*.95);
+  return { x:s.head.x, y:s.head.y - s.head.r*.06,
+           r:Math.max(26, Math.min(Math.min(innerWidth,innerHeight)*.42, r)) };
+}
+/* 목표 원과 지금 손의 관계를 한 곳에서만 계산한다 — 화면 표시·판정·QA 진단이 같은 숫자를 본다 */
+function palmSyncMeasure(snap){
+  if (snap){
+    const px=Math.hypot(snap.pts[9].x-snap.pts[0].x, snap.pts[9].y-snap.pts[0].y);
+    const dm=snap.depth && Number.isFinite(snap.depth.distM) ? snap.depth.distM : null;
+    // 광학 상수 kPx = 화면상 손바닥 × 실측 거리 — 손을 어디에 두든 같은 값이어야 한다
+    if (px>6 && dm && dm>.12) palmSync.kPx = palmSync.kPx==null ? px*dm
+                                           : palmSync.kPx + (px*dm - palmSync.kPx)*.25;
+  }
+  const tp=palmSyncTarget();
+  if (!snap) return { tp, ratio:0, near:false, dx:null, dy:null, tr:Math.round(tp.r), distM:null };
+  const palmPx=Math.hypot(snap.pts[9].x-snap.pts[0].x, snap.pts[9].y-snap.pts[0].y);
+  const c=handCenter();
+  return { tp, ratio:palmSync.kPx ? palmPx/tp.r : 0,
+           near:!!c && Math.hypot(c.x-tp.x, c.y-tp.y) < tp.r*1.6,
+           dx:c?Math.round(c.x-tp.x):null, dy:c?Math.round(c.y-tp.y):null, tr:Math.round(tp.r),
+           distM:snap.depth && Number.isFinite(snap.depth.distM) ? snap.depth.distM : null };
+}
+function palmSyncTick(dt, now, snap){
+  const el=$('palmSync');
+  if (palmSync.phase==='wait'){
+    if (!snap) return;
+    palmSync.phase='run'; palmSync.startAt=now; palmSync.lastAt=now;
+  }
+  if (palmSync.phase!=='run'){ if (el && !el.hidden) el.hidden=true; return; }
+  if (now-palmSync.startAt>PALMSYNC_TIMEOUT) return palmSyncFinish(false);
+  /* 유지 시간은 프레임 dt가 아니라 실제 시계로 센다. 메인 루프의 dt는 0.05초로 잘려 있어
+     20fps보다 느린 기기(구형 노트북·저가 태블릿)에서는 "3초"가 실제로 6~9초가 된다.
+     사람이 화면의 카운트다운을 보고 있으므로, 그 숫자는 손목시계와 같아야 한다.
+     한 프레임이 길게 멈춘 경우는 0.25초까지만 인정한다(멈춘 사이의 자세는 확인할 수 없으므로). */
+  const adv=palmSync.lastAt ? Math.min(.25, Math.max(0,(now-palmSync.lastAt)/1000)) : 0;
+  palmSync.lastAt=now;
+  const mz=palmSyncMeasure(snap), tp=mz.tp;
+  palmSync.tot++;
+  let ratio=0, near=false;
+  if (snap){
+    palmSync.det++;
+    ratio=mz.ratio; near=mz.near;
+    palmSync.ratio=ratio;
+    // 목표까지의 화면상 편차 — 운영/QA에서 "왜 안 맞는지"를 숫자로 볼 수 있게 남긴다
+    palmSync.dx=mz.dx; palmSync.dy=mz.dy; palmSync.tr=mz.tr;
+    if (mz.distM) palmSync.seen.push(mz.distM);
+  }
+  /* 못 맞추고 7초가 지났다면 목표 거리가 그 사람에게 무리인 것이다(카메라에 아주 붙어 앉은 경우 등).
+     그 사람이 실제로 낸 거리의 중앙값으로 목표를 한 번만 옮긴다 — 원이 조용히 커지거나 작아진다. */
+  if (!palmSync.adapted && palmSync.t<=0 && palmSync.seen.length>20
+      && now-palmSync.startAt>PALMSYNC_ADAPT_MS){
+    const med=medianOf(palmSync.seen.slice());
+    if (Number.isFinite(med)){
+      palmSync.aim=Math.max(.24, Math.min(.62, med)); palmSync.adapted=true;
+      toast('손이 닿는 거리에 맞춰 원을 조정했어요');
+    }
+  }
+  const sized=ratio>0 && Math.abs(ratio-1)<=PALMSYNC_TOL;
+  const matched=!!snap && sized && near;
+  palmSync.matched=matched;
+  palmSync.hint = !snap ? '손을 카메라에 보여 주세요'
+    : !near ? '강아지 머리 쪽으로 손을 옮겨 주세요'
+    : ratio<1-PALMSYNC_TOL ? '손을 조금 더 가까이'
+    : ratio>1+PALMSYNC_TOL ? '손을 조금 더 멀리'
+    : '그대로 유지해 주세요';
+  // 맞은 동안만 채우고, 어긋나면 절반 속도로 빠진다 (한 프레임 놓쳤다고 처음부터 다시 하면 짜증난다)
+  if (matched){
+    palmSync.t=Math.min(PALMSYNC_SEC, palmSync.t+adv);
+    if (snap.depth && Number.isFinite(snap.depth.distM)) palmSync.sd.push(snap.depth.distM);
+  } else palmSync.t=Math.max(0, palmSync.t-adv*.55);
+  if (el){
+    el.hidden=false;
+    const d=tp.r*2*1.28;
+    el.style.left=`${tp.x}px`; el.style.top=`${tp.y}px`;
+    el.style.width=`${d}px`; el.style.height=`${d}px`;
+    el.classList.toggle('ok', matched);
+    const live=el.querySelector('.psLive'), arc=el.querySelector('.psArc');
+    if (live) live.setAttribute('r', String(Math.max(6, Math.min(112, 52*(ratio||.001)))));
+    if (arc){ const C=2*Math.PI*58, p=palmSync.t/PALMSYNC_SEC;
+      arc.setAttribute('stroke-dasharray', `${(C*p).toFixed(1)} ${C.toFixed(1)}`); }
+    const hint=$('palmSyncHint');
+    if (hint) hint.textContent=`${palmSync.hint} · ${(PALMSYNC_SEC-palmSync.t).toFixed(1)}초`;
+  }
+  if (palmSync.t>=PALMSYNC_SEC) palmSyncFinish(true);
+}
+/* 건너뛰기 — 심사 시연 중 카메라가 말을 안 들어도 사람이 즉시 넘어갈 수 있어야 한다.
+   넘어가면 기존 자동 학습(앞뒤 왕복으로 기준을 배우는 경로)이 그대로 이어받는다. */
+$('palmSyncSkip')?.addEventListener('click', ()=>{ palmSyncFinish(false);
+  toast('동기화를 건너뜁니다 — 손을 앞뒤로 한 번 왕복해 주세요'); });
 const _hq = { m:new THREE.Matrix4(), q:new THREE.Quaternion(), e:new THREE.Euler(), id:new THREE.Quaternion() };
 function handOrientTarget(qOut){
   const snap=handSnap;
@@ -2851,6 +3040,7 @@ function tickHand3D(dt){
 function updateHandTrack(dt) {
   const now=performance.now();
   const snap=handSnap && now-handSnap.ts<650 ? handSnap : null;
+  palmSyncTick(dt, now, snap);            // 3초 손바닥 동기화 (진행 중일 때만 동작)
   if (snap) {
     const c=handCenter();
     const xs=snap.pts.map(p=>p.x), ys=snap.pts.map(p=>p.y);
@@ -3090,7 +3280,12 @@ function tickSimulation(t,dt) {
     const needCal=tracked && hand3dDepth.unit!=='abs' && dSpan<HAND3D_DEPTH_MIN_SPAN;
     const wantSweep=tracked && hand3dDepth.unit==='abs' && dSpan<HAND3D_ABS_MIN_SPAN
                     && handTrackStartAt && now-handTrackStartAt<10000;
-    const handStatus=needCal ? '손을 앞뒤로 한 번 왕복해 주세요'
+    // 동기화 중에는 오버레이가 이미 구체적으로 안내하므로 상태줄도 같은 말을 하게 맞춘다.
+    // 동기화를 마쳤으면 기준이 확정됐으니 "왕복해 주세요" 권유는 두 번 다시 띄우지 않는다.
+    const syncing=palmSync.phase==='run' || palmSync.phase==='wait';
+    const handStatus=syncing ? `동기화 중 · ${palmSync.hint||'손을 카메라에 보여 주세요'}`
+      : palmSync.done ? (hand ? (open?'손바닥 인식됨 · 동기화 완료':'손 인식됨 · 동기화 완료') : '손 대기')
+      : needCal ? '손을 앞뒤로 한 번 왕복해 주세요'
       : wantSweep ? '손을 앞뒤로 한 번 왕복하면 더 정밀해져요'
       : hand ? (open?'손바닥 인식됨':'손 인식됨') : '손 대기';
     const voiceStatus=now-lastVoiceHeardAt<1600?'음성 인식됨':'음성 대기';
@@ -3369,7 +3564,17 @@ window.__MUNG__ = {
     handRealtime:{ presence:Math.round(handPresence*100)/100, tracking:!!currentSimulationHand(),
       curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate,
       infPath, infHz, infMs, e2eMs:Math.round(e2eMs), e2eSrc,
-      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v8-touch-1' },
+      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v9-palmsync-2' },
+    palmSync:{ phase:palmSync.phase, ratio:Math.round(palmSync.ratio*100)/100,
+      matched:palmSync.matched, held:Math.round(palmSync.t*100)/100, need:PALMSYNC_SEC,
+      done:palmSync.done, hint:palmSync.hint, samples:palmSync.sd.length,
+      calM:palmSync.calM==null?null:Math.round(palmSync.calM*1000)/1000,
+      restLo:palmSync.restLo==null?null:Math.round(palmSync.restLo*1000)/1000,
+      restHi:palmSync.restHi==null?null:Math.round(palmSync.restHi*1000)/1000,
+      detRate:palmSync.tot?+(palmSync.det/palmSync.tot).toFixed(2):null,
+      dx:palmSync.dx, dy:palmSync.dy, tr:palmSync.tr, report:palmSync.report,
+      aimM:Math.round(palmSync.aim*1000)/1000, adapted:palmSync.adapted,
+      kPx:palmSync.kPx==null?null:Math.round(palmSync.kPx*10)/10 },
     simulation:{phase:simExperience.phase,state:simulationCopy().state,trust:Math.round(simExperience.trust),
       completed:simExperience.completed,manual:simExperience.manual,handVisible:!!currentSimulationHand(),cameraVisible:false},
     online:navigator.onLine, fps:fpsNow, webglReady, eventCount:eventLog.length
@@ -3378,6 +3583,15 @@ window.__MUNG__ = {
   selectScenario: id => setScenario(id,'qa_api'),
   input: cmd => command(cmd,'qa_api'),
   setSimulationPhase: phase => setSimulationPhase(phase,'qa_api'),
+  palmSyncStart: () => palmSyncStart(),
+  palmSyncSkip:  () => palmSyncFinish(false),
+  palmSyncTarget: () => palmSyncTarget(),
+  // 동기화가 진행 중이 아니어도 목표 원 대비 현재 손의 크기·위치를 읽을 수 있게 한다
+  palmSyncProbe: () => { const now=performance.now();
+    const m=palmSyncMeasure(handSnap && now-handSnap.ts<650 ? handSnap : null);
+    return { ratio:m.ratio, near:m.near, dx:m.dx, dy:m.dy, tr:m.tr,
+             tx:Math.round(m.tp.x), ty:Math.round(m.tp.y), aimM:palmSync.aim,
+             kPx:palmSync.kPx, distM:Math.round(hand3dDepth.distM*1000)/1000 }; },
   privacy: { storesVideo:false, storesAudio:false, storesFace:false, storesHandLandmarks:false }
 };
 loadDogSpriteForBreed(breedKey);
