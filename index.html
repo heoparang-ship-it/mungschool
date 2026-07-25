@@ -2363,6 +2363,11 @@ const HAND3D_ORIENT = [Math.PI/2, 0, 0];  // GLB 축 보정: 손등 정면·손�
 const HAND3D_BASE_TILT = (()=>{ const v=parseFloat(new URLSearchParams(location.search).get('handTilt'));
   return Number.isFinite(v) ? v : 2.05; })();    // 뷰 공간 기울기 보정 (실측 확정 · ?handTilt= 로 튜닝)
 const HAND3D_GRAB_FROM_OPEN = true;       // GrabHold가 펴짐→쥠 방향인지 여부
+/* ★깊이→크기 (2026-07-25): 원근만으로는 사용 구간에서 크기 변화가 1.2배도 안 돼
+   "강아지를 만진다"는 감각이 죽는다. 렌더 깊이에서 목표 화면 높이 비율을 직접 정한다. */
+const HAND3D_SIZE_NEAR = .76;             // 창문 바로 앞(손을 몸쪽으로 뺀 상태) = 화면 높이의 76%
+const HAND3D_SIZE_FAR  = .38;             // 강아지 코앞(가장 깊을 때) = 38% ≈ 강아지 머리 지름의 1.2배
+const HAND3D_MODEL_H   = 1.35;            // 정규화된 모델 최대 치수 (아래 fixStep 1과 반드시 동일)
 let hand3dRenderer=null, hand3dScene=null, hand3dShadowScene=null, hand3dCam=null;
 let hand3dRoot=null, hand3dOrient=null, hand3dInner=null, hand3dReady=false, hand3dMats=[], hand3dPrepass=null;
 let hand3dSkins=[], hand3dFixStep=0;      // 첫 렌더 후 실측 바운딩으로 스케일·중심 재보정
@@ -2496,7 +2501,22 @@ function learnDepth(sig, palmLen, ts){
 // ─── 손 3D 자세 (손날·손등↔손바닥 뒤집기 인식) ───
 // 랜드마크의 미러보정 x·y + MediaPipe 상대 z로 손 기저(위·가로·법선)를 만들어
 // '손가락 위 + 손바닥이 카메라를 향한 중립 자세' 대비 회전 편차 쿼터니언을 구한다.
-const HAND3D_FLIP_FOR = 'Left';           // 가로축 반전 기준 손 (실사용 확인으로 확정: 2026-07-23)
+/* ─── 손 좌우(chirality) 규약 — 2026-07-25 재유도 ───
+   MediaPipe handedness 라벨은 "입력 영상이 셀피처럼 좌우 반전되어 있다"고 가정하고 붙는다.
+   우리는 원본(비반전) video를 그대로 넣으므로 라벨은 항상 해부학적 손의 반대다.
+     · 실제 오른손 → 라벨 'Left'   · 실제 왼손 → 라벨 'Right'
+   반면 pts3.x는 미러 보정(mirrored ? 1-x : x)을 거치므로 화면 점군의 chirality는
+   mirrored=true면 라벨과 같고, false(후면 카메라)면 그 반대다.
+   기하 규칙: f=손목→손가락, s=새끼MCP→검지MCP 일 때 오른손은 f×s=손등, 왼손은 f×s=손바닥.
+   모델 중립이 '손등 정면'이므로 n=u×v 는 반드시 손등이어야 한다 → 화면 점군이 'Right'일 때만 반전. */
+const flipHand   = h => h==='Left' ? 'Right' : (h==='Right' ? 'Left' : '');
+const trueHandOf = h => flipHand(h||'');                     // 실제 해부학적 손
+const dispHandOf = h => (mirrored ? (h||'') : flipHand(h||''));   // 화면 점군의 손
+const HAND3D_FLIP_FOR = 'Right';          // 이전 'Left'는 손등/손바닥이 뒤집혀 오른손이 왼손처럼 보였다
+let hand3dMirror = 0;                     // 렌더 모델 좌우 반전 (-1=반전(왼손) · 1=원본(오른손) · 0=미정)
+let hand3dSizeMul = 1, hand3dSizeFrac = 0;// 깊이→크기 배율 · 목표 화면높이 비율 (QA 노출용)
+let hand3dZn = .34, hand3dZnT = .34;      // 크기 전용 정규화 깊이 (접촉 클램프 전 원본) · 목표값
+const handChirVote = { h:'', n:0 };       // 라벨 흔들림 방지 히스테리시스
 const hand3dQDev = new THREE.Quaternion();
 let hand3dContact=false, hand3dTouchFxAt=0;   // 강아지 접촉 상태 · 촉감 피드백 쿨다운
 /* ─── 접촉·쓰다듬기 (블랙앤화이트식 손맛) ───
@@ -2691,10 +2711,10 @@ function handOrientTarget(qOut){
   const w0=W(0);
   const u=W(9).sub(w0);                              // 손목→중지 기저 = 손의 세로축
   const v=W(5).sub(W(17));                           // 새끼→검지 = 손의 가로축
-  if ((snap.handed||'')===HAND3D_FLIP_FOR) v.negate();
+  if (dispHandOf(snap.handed)===HAND3D_FLIP_FOR) v.negate();
   if (u.lengthSq()<1e-8 || v.lengthSq()<1e-8) return false;
   u.normalize();
-  const n=new THREE.Vector3().crossVectors(u,v);     // 손바닥 법선 (중립=카메라 방향 +z)
+  const n=new THREE.Vector3().crossVectors(u,v);     // 손등 법선 (중립=카메라 방향 +z)
   if (n.lengthSq()<1e-8) return false;
   n.normalize();
   u.sub(n.clone().multiplyScalar(u.dot(n))).normalize();   // u ⟂ n 직교화
@@ -2702,6 +2722,46 @@ function handOrientTarget(qOut){
   _hq.m.makeBasis(r,u,n);
   qOut.setFromRotationMatrix(_hq.m);
   return true;
+}
+/* ★실제 손이 왼손이면 모델(the-hand.glb = 오른손)을 좌우 반전한다.
+   inner.scale.z 는 GLB 로컬 좌우축(검지 -z · 새끼 +z)이라 부호만 뒤집으면
+   손가락축(+x)·손등축(+y)은 그대로 두고 엄지 쪽만 반대로 간다.
+   three r160은 matrixWorld.determinant()<0 이면 앞면 와인딩을 뒤집으므로
+   FrontSide + 깊이 선행 패스 조합에서도 안전하고, 법선 역전치 행렬이 조명도 맞춰준다. */
+function applyHandChirality(label){
+  if (!hand3dInner) return;
+  const t=trueHandOf(label);
+  if (t){ if (handChirVote.h===t) handChirVote.n++; else { handChirVote.h=t; handChirVote.n=1; } }
+  if (handChirVote.n<8) return;                      // 8프레임 연속 같은 라벨만 신뢰 (깜빡임 방지)
+  const want=handChirVote.h==='Left' ? -1 : 1;
+  if (want===hand3dMirror) return;
+  hand3dMirror=want;
+  hand3dInner.scale.z=Math.abs(hand3dInner.scale.z)*want;
+  if (hand3dFixStep!==1) hand3dFixStep=2;            // 반전 후 중심 재보정
+}
+/* 손 모델 축 하나를 월드(뷰) 방향으로 — QA에서 손등 방향·엄지 쪽을 수치로 검증한다 */
+const _axE=new THREE.Euler(HAND3D_ORIENT[0],HAND3D_ORIENT[1],HAND3D_ORIENT[2]);
+function handAxisWorld(x,y,z){
+  const v=new THREE.Vector3(x,y,z).applyEuler(_axE);
+  if (hand3dRoot) v.applyQuaternion(hand3dRoot.quaternion);
+  return v;
+}
+/* 실제 렌더 크기 = 스킨 메시 월드 바운딩박스 8정점을 카메라로 투영한 NDC 폭/높이 → 화면 비율.
+   WebGL 캔버스는 합성 후 픽셀을 되읽을 수 없으므로(빈 이미지) 수학적으로 측정한다. */
+function handScreenSpan(){
+  if (!hand3dSkins.length || !hand3dCam) return null;
+  try {
+    const b=new THREE.Box3();
+    for (const m of hand3dSkins){ if (!m.boundingBox) m.computeBoundingBox();
+      b.union(m.boundingBox.clone().applyMatrix4(m.matrixWorld)); }
+    if (b.isEmpty()) return null;
+    const v=new THREE.Vector3(); let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+    for (let i=0;i<8;i++){
+      v.set(i&1?b.max.x:b.min.x, i&2?b.max.y:b.min.y, i&4?b.max.z:b.min.z).project(hand3dCam);
+      x0=Math.min(x0,v.x); x1=Math.max(x1,v.x); y0=Math.min(y0,v.y); y1=Math.max(y1,v.y);
+    }
+    return { w:Math.round((x1-x0)/2*1000)/1000, h:Math.round((y1-y0)/2*1000)/1000 };
+  } catch(e){ return null; }
 }
 try {
   hand3dRenderer = new THREE.WebGLRenderer({ canvas:$('hand3d'), alpha:true, antialias:true });
@@ -2926,6 +2986,7 @@ function tickHand3D(dt){
       // 비선형 커브: 멀리선 빠르게 이동, 강아지 근처에선 미세 제어 (만지기 직전 정밀 뎁스)
       const zn=1-Math.pow(1-znRaw,1.7);
       targetZ=3.9-zn*3.55;                                     // 월드 z 3.9(창문 앞)→0.35(강아지 코앞)
+      hand3dZnT=znRaw;   // ★크기는 접촉 클램프 전 원본 깊이로 (닿는 동안 크기가 굳으면 감각이 죽는다)
       // 리치 마그넷: 깊이 들어갈수록 화면 위치도 강아지 쪽으로 수렴
       const dp=dogScreenPos();
       const magnet=clamp01((znRaw-.5)/.5)*.4;
@@ -2963,11 +3024,15 @@ function tickHand3D(dt){
   const kPos=1-Math.exp(-Math.max(.001,dt)*(tracking?13:4.5));
   const kZ=1-Math.exp(-Math.max(.001,dt)*9);     // z 반응 가속 (감도↑)
   hand3dPose.z+=(targetZ-hand3dPose.z)*kZ;
+  // 실추적이 아닌 분기(시연·홀드·휴식)는 목표 z에서 정규화 깊이를 역산해 같은 크기 규칙을 태운다
+  if (!(tracking && hand.actual)) hand3dZnT=1-Math.pow(clamp01((targetZ-.35)/3.55), 1/1.7);
+  hand3dZn+=(hand3dZnT-hand3dZn)*kZ;
   const w=hand3dWorldFromScreen(nx,ny,hand3dPose.z);
   hand3dPose.x+=(w.x-hand3dPose.x)*kPos;
   hand3dPose.y+=(w.y-hand3dPose.y)*kPos;
   hand3dPose.rz+=(targetRz-hand3dPose.rz)*kPos;
   // 3D 자세: 실추적 중엔 랜드마크 기저로 손날·뒤집기까지 반영, 놓치면 동결, 휴식 땐 중립 복귀
+  if (tracking && hand.actual) applyHandChirality(handSnap?.handed||'');   // 왼손이면 모델 좌우 반전
   if (tracking && hand.actual && handOrientTarget(_hq.q)) hand3dQDev.slerp(_hq.q, 1-Math.exp(-dt*9));
   else if (!holding && !(tracking&&hand.actual)) hand3dQDev.slerp(_hq.id, 1-Math.exp(-dt*2.5));
   const restCurl=.2;
@@ -2989,11 +3054,23 @@ function tickHand3D(dt){
     const rollExtra=(tracking&&hand.actual)?0:hand3dPose.rz;
     _hq.e.set(0,0,HAND3D_BASE_TILT+rollExtra);
     hand3dRoot.quaternion.setFromEuler(_hq.e).premultiply(hand3dQDev);
-    for (const m of hand3dMats) m.opacity=hand3dOpacity*handPresence;
     for (const f of Object.keys(hand3dPose.curls)) applyFingerCurl(f,hand3dPose.curls[f]);
     // 접촉 스쿼시: 손바닥 법선(로컬 z) 방향으로 눌리고 옆으로 살짝 퍼진다 → "닿았다"는 감각
     const e=hand3dTouch.strength*(.05+hand3dTouch.press*.06);
-    hand3dRoot.scale.set(1+e*.55, 1+e*.55, 1-e);
+    /* ★깊이→크기: 정규화 깊이(hand3dZn)로 화면 높이 대비 목표 크기를 직접 정하고, 원근이 이미
+       주는 크기(natural)로 나눠 배율을 낸다. 렌더 z가 아니라 접촉 클램프 전 원본 깊이를 쓰므로
+       강아지에 닿아 z가 멈춘 뒤에도 크기가 굳지 않는다. 창문 모델(깊이 들어갈수록 = 강아지에
+       가까울수록 작아진다)은 그대로. smoothstep으로 실제 사용 구간에 변화를 몰아준다 (≈2.0배). */
+    const qs=clamp01((hand3dZn-.08)/.84);
+    const frac=HAND3D_SIZE_NEAR+(HAND3D_SIZE_FAR-HAND3D_SIZE_NEAR)*(qs*qs*(3-2*qs));
+    const dCam=Math.max(.35,hand3dCam.position.z-hand3dPose.z);
+    const natural=HAND3D_MODEL_H/(2*Math.tan(HAND3D_FOV*Math.PI/360)*dCam);   // 원근만의 화면높이 비율
+    const mul=Math.max(.35,Math.min(2.2,frac/natural));
+    hand3dSizeFrac=frac; hand3dSizeMul=mul;
+    hand3dRoot.scale.set((1+e*.55)*mul, (1+e*.55)*mul, (1-e)*mul);
+    // 보조 깊이 단서: 깊이 들어갈수록 살짝 어두워진다 (불투명도는 '강아지 우선' 규칙대로 건드리지 않음)
+    const sh=.88+.12*clamp01((frac-HAND3D_SIZE_FAR)/Math.max(1e-3,HAND3D_SIZE_NEAR-HAND3D_SIZE_FAR));
+    for (const m of hand3dMats){ m.opacity=hand3dOpacity*handPresence; m.color.setRGB(sh,.8902*sh,.8157*sh); }
   }
   if (handShadow){
     const floorY=-w.halfH*.8;
@@ -3022,7 +3099,8 @@ function tickHand3D(dt){
       if (hand3dFixStep===1){
         const bs=box.getSize(new THREE.Vector3());
         const maxd=Math.max(bs.x,bs.y,bs.z);
-        if (maxd>1e-3) hand3dInner.scale.multiplyScalar(1.35/maxd);
+        const rs=Math.abs(hand3dRoot.scale.x)||1;   // 실측 박스엔 루트 배율이 섞여 있으므로 되돌린다
+        if (maxd>1e-3) hand3dInner.scale.multiplyScalar(HAND3D_MODEL_H/maxd*rs);
         hand3dFixStep=2;
       } else {
         const c=box.getCenter(new THREE.Vector3());
@@ -3558,13 +3636,22 @@ window.__MUNG__ = {
       depthSrc:hand3dDepth.src||'', depthRms:hand3dDepth.rms==null?null:Math.round(hand3dDepth.rms*10)/10,
       znRaw:hand3dDepth.zn==null?null:Math.round(hand3dDepth.zn*1000)/1000,
       yawDeg:Math.round(new THREE.Euler().setFromQuaternion(hand3dQDev,'YXZ').y*180/Math.PI),
+      handLabel:handSnap?.handed||'', handTrue:trueHandOf(handSnap?.handed||''),
+      handDisp:dispHandOf(handSnap?.handed||''), mirror:hand3dMirror, camMirror:mirrored,
+      dorsalZ:Math.round(handAxisWorld(0,1,0).z*100)/100,          // >0 = 손등이 보는 사람을 향함
+      thumbX:Math.round(handAxisWorld(0,0,-(hand3dMirror||1)).x*100)/100,  // 엄지 쪽 화면 방향(+=오른쪽)
+      fingerY:Math.round(handAxisWorld(1,0,0).y*100)/100,          // >0 = 손가락이 위를 향함
+      sizeMul:Math.round(hand3dSizeMul*1000)/1000,
+      sizeFrac:Math.round(hand3dSizeFrac*1000)/1000,
+      zn:Math.round(hand3dZn*1000)/1000, chirVote:handChirVote.h+':'+handChirVote.n,
+      screen:handScreenSpan(),                                   // 실제 렌더 크기(화면 비율) — QA 검증용
       contact:hand3dContact, contactStrength:Math.round(hand3dTouch.strength*100)/100,
       petMeter:Math.round(hand3dTouch.pet*100)/100, strokes:hand3dTouch.strokes,
       curls:Object.fromEntries(Object.entries(hand3dPose.curls).map(([k,v])=>[k,Math.round(v*100)/100])) },
     handRealtime:{ presence:Math.round(handPresence*100)/100, tracking:!!currentSimulationHand(),
       curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate,
       infPath, infHz, infMs, e2eMs:Math.round(e2eMs), e2eSrc,
-      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v9-palmsync-2' },
+      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v10-hand-chirality-size' },
     palmSync:{ phase:palmSync.phase, ratio:Math.round(palmSync.ratio*100)/100,
       matched:palmSync.matched, held:Math.round(palmSync.t*100)/100, need:PALMSYNC_SEC,
       done:palmSync.done, hint:palmSync.hint, samples:palmSync.sd.length,
