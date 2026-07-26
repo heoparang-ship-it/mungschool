@@ -23,7 +23,9 @@
      wrap의 transform은 성공/오류 키프레임이 쓰므로 내부 캔버스에만 얹는다. */
   #dogSprite { position:absolute; inset:0; width:100%; height:100%; filter:drop-shadow(0 24px 18px rgba(15,27,38,.24));
                transform:translate(var(--dog-lean-x,0px),var(--dog-lean-y,0px)) rotate(var(--dog-lean-r,0deg));
-               transform-origin:50% 80%; }
+               transform-origin:50% 80%; transition:opacity .16s ease-out; }
+  /* 실제 3D toon 리그의 첫 정상 프레임이 확인된 뒤에만 2D 안전망을 감춘다. */
+  #dogSpriteWrap.toonReady #dogSprite { opacity:0; visibility:hidden; }
   #petFurFx { position:absolute; z-index:3; left:50%; top:35%; width:28%; aspect-ratio:1; pointer-events:none;
               opacity:0; transform:translate(-50%,-50%) scale(var(--pet-fx-scale,.8)) rotate(var(--pet-fx-r,0deg));
               border-radius:50%; mix-blend-mode:screen;
@@ -853,6 +855,7 @@
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+import { createToonChihuahua } from './assets/toon-chihuahua.js?v=16.4';
 import { FilesetResolver, GestureRecognizer, FaceDetector }
   from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
 
@@ -902,6 +905,14 @@ const dogVeilCtx = dogVeilCanvas.getContext('2d');
 let dogVeilAlpha = 0;                          // QA 노출용 (0 = 가림 없음)
 function drawDogVeil(){
   if (!dogVeilCtx) return;
+  /* 3D 경로는 손과 강아지가 같은 카메라·깊이 버퍼를 쓴다. 스프라이트용 픽셀 베일을
+     다시 얹으면 이중 가림이 되므로 2D 폴백일 때만 유지한다. */
+  if (toonDogVisible) {
+    dogVeilAlpha=0; dogVeilCanvas.style.opacity='0';
+    dogVeilCtx.setTransform(1,0,0,1,0,0);
+    dogVeilCtx.clearRect(0,0,dogVeilCanvas.width,dogVeilCanvas.height);
+    return;
+  }
   const T=hand3dTouch;
   // 잠김(sink)이 생겨야 가려진다: 표면에 '닿은' 순간엔 손이 앞에, 밀어 넣을수록 털에 덮인다
   const a=clamp01(T.strength)*clamp01(T.sink*1.15)*clamp01(handPresence*1.2);
@@ -1254,6 +1265,10 @@ const dogSpriteCanvas = $('dogSprite');
 const dogSpriteCtx = dogSpriteCanvas.getContext('2d');
 let dogSpriteReady = false, dogSpritePose = 'stand', dogAnimStartedAt = performance.now();
 let dogFrameIndex = -1, dogSourceFrame = 0;
+let toonDogReady=false, toonDogVisible=false, toonDogFailed=false;
+let toonDogScene=null, toonDogRig=null, toonDogRoot=null, toonDogBounds=null;
+let toonDogPose='guarded_idle', toonDogFrame=0, toonDogRenderedFrames=0;
+let toonDogLastStep=-1, toonDogLastRenderAt=0;
 
 const finiteOr = (n,fallback=0) => Number.isFinite(n) ? n : fallback;
 // 카메라 재시작·회전·뷰포트 전환 직후 한 프레임의 비정상값이 손→접촉→강아지 모션 전체로
@@ -1373,6 +1388,8 @@ function renderSimulationDog(now) {
   aura.style.opacity=(.58+attention*.18+comfort*.2).toFixed(3);
 }
 function tickDogSprite(now) {
+  // 3D toon 캐릭터는 손 렌더 패스 안에서 같은 depth buffer로 갱신·합성한다.
+  if (toonDogVisible && document.body.classList.contains('virtualMode')) return;
   if (!dogSpriteReady) return;
   if (document.body.classList.contains('virtualMode')) { renderSimulationDog(now); return; }
   const track=DOG_MOTIONS[dogSpritePose] || DOG_MOTIONS.stand;
@@ -1943,7 +1960,7 @@ $('rS').value = placement.s;
 $('rS').addEventListener('input', e => { placement.s = +e.target.value; applyPlacement();
   localStorage.setItem('mung-place-v4', JSON.stringify(placement)); });
 function dogScreenPos() {
-  if (dogSpriteReady) {
+  if (toonDogVisible || dogSpriteReady) {
     const r=$('dogSpriteWrap').getBoundingClientRect();
     return { x:r.left+r.width*.5, y:r.top+r.height*.42 };
   }
@@ -1952,7 +1969,7 @@ function dogScreenPos() {
   return { x:(v.x*0.5+0.5)*innerWidth, y:(-v.y*0.5+0.5)*innerHeight };
 }
 function dogBase() {
-  if (dogSpriteReady) {
+  if (toonDogVisible || dogSpriteReady) {
     const s=$('dogSpriteWrap').getBoundingClientRect();
     return { x:s.left+s.width*.5, y:s.top+s.height*.82, r:Math.max(42,s.width*.29) };
   }
@@ -2863,7 +2880,7 @@ let handTouchShadow=null;                     // 강아지 몸에 지는 손 그
    위에 놓이고, 깊이가 깊어질수록 털에 덮여 '뒤로 돌아 들어갔다'로 읽힌다. */
 const tailOf = b => ({ x:b.x-b.rx*.42, y:b.y+b.ry*.29, rx:b.rx*.25, ry:b.ry*.40 });
 function dogSurface(){
-  if (dogSpriteReady){
+  if (toonDogVisible || dogSpriteReady){
     const r=$('dogSpriteWrap').getBoundingClientRect();
     const body={ x:r.left+r.width*.5, y:r.top+r.height*.68, rx:Math.max(38,r.width*.30),
                  ry:Math.max(28,r.height*.20) };
@@ -3220,6 +3237,196 @@ function sizeHand3d(){
   hand3dCam.aspect=innerWidth/innerHeight; hand3dCam.updateProjectionMatrix();
 }
 sizeHand3d();
+
+/* ─────────── 길티기어식 실시간 3D 셀 치와와 ───────────
+   그림 레이어를 흔드는 방식이 아니라 실제 3D 파츠·깊이·셀 셰이딩을 쓴다. 강아지는 손과
+   renderer/camera/depth buffer를 공유하되 별도 scene에 둔다. 그래야 손의 depth prepass가
+   inverted-hull 외곽선까지 덮어 검게 만드는 일을 피하면서도 앞뒤 가림은 물리적으로 맞는다. */
+const forceDog2D = new URLSearchParams(location.search).get('dog2d') === '1';
+const TOON_DOG_POSE_HZ=12, TOON_DOG_CONTACT_HZ=15, TOON_DOG_Z=.05;
+const toonDogStats={ triangles:0, drawCalls:0, quality:'', sharedDepth:true, failure:'' };
+
+function disableToonDog(reason='runtime'){
+  toonDogReady=false; toonDogVisible=false; toonDogFailed=true;
+  toonDogStats.failure=String(reason?.message||reason||'runtime');
+  const wrap=$('dogSpriteWrap');
+  wrap.classList.remove('toonReady'); wrap.dataset.toonReady='false';
+  if (toonDogRoot) toonDogRoot.visible=false;
+  dogVeilCanvas.style.opacity='0';
+  console.warn('3D 셀 치와와 비활성화 — 2D 안전망으로 전환',reason);
+}
+function initToonDog(){
+  if (forceDog2D || !hand3dRenderer || !hand3dScene || !hand3dCam) return;
+  try {
+    toonDogScene=new THREE.Scene();
+    toonDogScene.add(new THREE.HemisphereLight(0xfff6df,0x6e5b71,1.42));
+    const key=new THREE.DirectionalLight(0xfff0cf,2.0); key.position.set(-3.4,5.2,6.5); toonDogScene.add(key);
+    const rim=new THREE.DirectionalLight(0x77e4d5,.72); rim.position.set(4.5,2.2,3.5); toonDogScene.add(rim);
+    toonDogRig=createToonChihuahua(THREE,{
+      quality:isMobile?'medium':'high',
+      outlineScale:isMobile?1.047:1.052
+    });
+    toonDogRoot=new THREE.Group();
+    toonDogRoot.name='MungschoolToonChihuahua:screen-fit-root';
+    toonDogRoot.add(toonDogRig.group); toonDogScene.add(toonDogRoot);
+    toonDogRig.group.updateMatrixWorld(true);
+    const box=new THREE.Box3().setFromObject(toonDogRig.group);
+    const size=box.getSize(new THREE.Vector3()), center=box.getCenter(new THREE.Vector3());
+    if (box.isEmpty() || !Number.isFinite(size.y) || size.y<.25) throw new Error('invalid toon dog bounds');
+    toonDogBounds={size,center};
+    toonDogRig.group.traverse(o=>{
+      if (!o.isMesh || !o.geometry) return;
+      const g=o.geometry, count=g.index?.count ?? g.attributes?.position?.count ?? 0;
+      toonDogStats.triangles+=Math.round(count/3);
+    });
+    toonDogStats.drawCalls=toonDogRig.group.userData.performance?.estimatedDrawCalls||0;
+    toonDogStats.quality=toonDogRig.group.userData.performance?.quality||'medium';
+    toonDogRoot.visible=true; toonDogReady=true; toonDogFailed=false;
+    const cv=$('hand3d');
+    cv.addEventListener('webglcontextlost',e=>{
+      e.preventDefault();
+      toonDogStats.handWasReady=hand3dReady;
+      hand3dReady=false;                       // 같은 context의 손도 즉시 2D 폴백
+      disableToonDog('webgl_context_lost');
+    });
+    cv.addEventListener('webglcontextrestored',()=>{
+      if (toonDogRig && toonDogScene) {
+        toonDogFailed=false; toonDogReady=true; toonDogRoot.visible=true;
+        hand3dReady=!!hand3dRoot && toonDogStats.handWasReady!==false;
+      }
+    });
+  } catch(error) { disableToonDog(error); }
+}
+function layoutToonDog(){
+  if (!toonDogReady || !toonDogRoot || !toonDogBounds) return;
+  const r=$('dogSpriteWrap').getBoundingClientRect();
+  if (!(r.width>10&&r.height>10)) return;
+  const nx=(r.left+r.width*.5)/innerWidth, ny=(r.top+r.height*.5)/innerHeight;
+  const world=hand3dWorldFromScreen(nx,ny,TOON_DOG_Z);
+  const worldHeight=(r.height/innerHeight)*world.halfH*2*.93;
+  const scale=worldHeight/toonDogBounds.size.y;
+  toonDogRoot.scale.setScalar(scale);
+  toonDogRoot.position.set(
+    world.x-toonDogBounds.center.x*scale,
+    world.y-toonDogBounds.center.y*scale,
+    TOON_DOG_Z-toonDogBounds.center.z*scale
+  );
+}
+function collectToonDogSignals(now){
+  const phase=Math.max(0,Math.min(4,simExperience.phase));
+  const wrap=$('dogSpriteWrap'), r=wrap.getBoundingClientRect();
+  const hand=currentSimulationHand();
+  const hx=r.left+r.width*.5, hy=r.top+r.height*.36, hr=Math.max(34,r.width*.235);
+  const handVisible=!!hand&&Number.isFinite(hand.x)&&Number.isFinite(hand.y);
+  const gazeX=handVisible?Math.max(-1,Math.min(1,(hand.x-hx)/(hr*1.35))):0;
+  const gazeY=handVisible?Math.max(-1,Math.min(1,(hand.y-hy)/(hr*1.4))):0;
+  const touching=hand3dTouch.strength>.08;
+  const touchingHead=touching&&hand3dTouch.part==='head';
+  const warning=simExperience.warningUntil>now;
+  const elapsed=Math.max(0,now-simExperience.phaseAt);
+  const walk=phase===3&&!touchingHead ? (elapsed<1650?.82:.12) : 0;
+  const touchX=touching&&Number.isFinite(hand3dTouch.cx)
+    ? Math.max(-1,Math.min(1,(hand3dTouch.cx-hx)/(hr*1.2))) : gazeX;
+  const touchY=touching&&Number.isFinite(hand3dTouch.cy)
+    ? Math.max(-1,Math.min(1,(hand3dTouch.cy-hy)/(hr*1.2))) : gazeY;
+  let reaction='neutral', pose=['guarded_idle','palm_watch','soft_idle','approach_trot','bonded_idle'][phase];
+  if (warning) { reaction='startled'; pose='warning_hold'; }
+  else if (['happy','excited'].includes(dogSpritePose)) { reaction='happy'; pose='celebrate'; }
+  else if (touchingHead) { reaction='pleased'; pose='pet_receive'; }
+  else if (phase===4) reaction='love';
+  else if (phase<=1) reaction='alert';
+  else if (phase===2) reaction='curious';
+  const contactCompression=touching
+    ? clamp01(hand3dTouch.strength*(.72+hand3dTouch.press*.28)+(touchingHead?hand3dTouch.headPet*.18:0))
+    : 0;
+  return {
+    phase,pose,reaction,gazeX,gazeY,touchX,touchY,walk,
+    trust:clamp01(simExperience.trust/100),
+    petStrength:contactCompression,
+    breathing:reduceMotion?0:1,
+    contact:touching, contactHead:touchingHead
+  };
+}
+function tickToonDog(now){
+  if (!toonDogReady || !toonDogRig) return;
+  layoutToonDog();
+  const signal=collectToonDogSignals(now);
+  const hz=signal.contact?TOON_DOG_CONTACT_HZ:TOON_DOG_POSE_HZ;
+  const step=Math.floor(now/1000*hz);
+  toonDogPose=signal.pose; toonDogFrame=step;
+  const wrap=$('dogSpriteWrap');
+  wrap.dataset.toonPose=signal.pose;
+  wrap.dataset.toonFrame=String(step);
+  wrap.dataset.toonHz=String(hz);
+  wrap.dataset.toonContact=String(signal.contact);
+  if (step===toonDogLastStep && !reduceMotion) return;
+  toonDogLastStep=step;
+  toonDogRig.update({
+    time:reduceMotion?0:step/hz,
+    gazeX:signal.gazeX,gazeY:signal.gazeY,
+    touchX:signal.touchX,touchY:signal.touchY,
+    breathing:signal.breathing,walk:signal.walk,
+    trust:signal.trust,petStrength:signal.petStrength,
+    reaction:signal.reaction
+  });
+  toonDogRig.group.userData.activePose=signal.pose;
+}
+function revealToonDog(){
+  if (toonDogVisible || !toonDogReady) return;
+  toonDogVisible=true; toonDogRenderedFrames=1;
+  const wrap=$('dogSpriteWrap');
+  wrap.classList.add('toonReady'); wrap.dataset.toonReady='true';
+  wrap.dataset.toonTriangles=String(toonDogStats.triangles);
+  wrap.dataset.toonDrawCalls=String(toonDogStats.drawCalls);
+  wrap.dataset.toonQuality=toonDogStats.quality;
+  wrap.dataset.toonSharedDepth='true';
+  recordEvent?.('toon_dog_ready',{
+    style:'real-time-3d-cel-animation',triangles:toonDogStats.triangles,
+    drawCalls:toonDogStats.drawCalls,quality:toonDogStats.quality,sharedDepth:true
+  });
+}
+function renderToonDogOnly(now){
+  if (!toonDogReady || !toonDogScene) return false;
+  try {
+    tickToonDog(now);
+    hand3dRenderer.clear(true,true,true);
+    hand3dRenderer.render(toonDogScene,hand3dCam);
+    revealToonDog(); toonDogRenderedFrames++; toonDogLastRenderAt=now;
+    return true;
+  } catch(error) { disableToonDog(error); return false; }
+}
+function renderHandDogComposite(now){
+  if (!toonDogReady || !toonDogScene) {
+    hand3dRenderer.clear(true,true,true);
+    hand3dRenderer.render(hand3dShadowScene,hand3dCam);
+    hand3dScene.overrideMaterial=hand3dPrepass;
+    hand3dRenderer.render(hand3dScene,hand3dCam);
+    hand3dScene.overrideMaterial=null;
+    hand3dRenderer.render(hand3dScene,hand3dCam);
+    return;
+  }
+  try {
+    tickToonDog(now);
+    const floorVisible=handShadow?.visible, touchVisible=handTouchShadow?.visible;
+    if (handTouchShadow) handTouchShadow.visible=false;
+    hand3dRenderer.clear(true,true,true);
+    hand3dRenderer.render(hand3dShadowScene,hand3dCam);
+    hand3dRenderer.clearDepth();
+    hand3dRenderer.render(toonDogScene,hand3dCam);
+    revealToonDog(); toonDogRenderedFrames++; toonDogLastRenderAt=now;
+    // 접촉 그림자만 강아지 위에 다시 얹는다. 바닥 손 그림자는 뒤쪽 패스에 남겨 둔다.
+    if (handShadow) handShadow.visible=false;
+    if (handTouchShadow) handTouchShadow.visible=touchVisible;
+    hand3dRenderer.render(hand3dShadowScene,hand3dCam);
+    hand3dScene.overrideMaterial=hand3dPrepass;
+    hand3dRenderer.render(hand3dScene,hand3dCam);
+    hand3dScene.overrideMaterial=null;
+    hand3dRenderer.render(hand3dScene,hand3dCam);
+    if (handShadow) handShadow.visible=floorVisible;
+    if (handTouchShadow) handTouchShadow.visible=touchVisible;
+  } catch(error) { disableToonDog(error); }
+}
+initToonDog();
 $('rHandOp').value = hand3dOpacity;
 $('rHandOp').addEventListener('input', e => {
   hand3dOpacity = +e.target.value;
@@ -3592,12 +3799,9 @@ function tickHand3D(dt){
   simHandDraw.size=Math.max(210,Math.min(620,(handTrack.extent||260)*2.15));
   tickTouchFeel(dt, tracking && !!hand.actual);
   try { drawDogVeil(); } catch(e){}
-  hand3dRenderer.clear(true,true,true);
-  hand3dRenderer.render(hand3dShadowScene,hand3dCam);
-  hand3dScene.overrideMaterial=hand3dPrepass;      // 깊이 선행 패스 → 내부 겹침 제거
-  hand3dRenderer.render(hand3dScene,hand3dCam);
-  hand3dScene.overrideMaterial=null;
-  hand3dRenderer.render(hand3dScene,hand3dCam);
+  // dog color → hand depth-only → hand color. 같은 depth buffer라 실제 손을 앞뒤로
+  // 움직일 때 픽셀 베일 없이 코·귀·몸통이 올바른 순서로 서로를 가린다.
+  renderHandDogComposite(performance.now());
   // 첫 렌더 후 실측 바운딩 재보정: ①스케일 ②중심 (스킨 변형 반영값 기준)
   if (hand3dFixStep && hand3dSkins.length){
     try {
@@ -3728,9 +3932,14 @@ function drawHandCell(cell, alpha, size) {
 }
 function renderVirtualHand(dt) {
   virtualHandCtx.clearRect(0,0,innerWidth,innerHeight);
-  if (!simExperience.started) { if (hand3dRenderer) hand3dRenderer.clear(true,true,true); return; }
+  if (!simExperience.started) {
+    if (toonDogReady) renderToonDogOnly(performance.now());
+    else if (hand3dRenderer) hand3dRenderer.clear(true,true,true);
+    return;
+  }
   updateHandTrack(dt);
-  if (hand3dReady) { tickHand3D(dt); return; }   // 3D 손 경로 (실패 시 아래 2D 폴백)
+  if (hand3dReady || toonDogReady) tickHand3D(dt);
+  if (hand3dReady) return;                       // GLB 실패 시 아래 2D 손 + 3D dog 폴백
   if (!virtualHandReady) return;
   const hand=currentSimulationHand();
   const tracking=!!hand;
@@ -4146,7 +4355,10 @@ function loop(t) {
   // virtualMode에선 구형 3D 강아지(#stage)가 숨겨져 있으므로 렌더 생략 → GPU 여유를 인식·3D손에 양보
   if (webglReady && !document.body.classList.contains('virtualMode')) renderer.render(scene, camera3);
   fpsAcc += 1/dt; fpsN++;
-  if (t - fpsAt > 1000) { fpsNow = Math.round(fpsAcc/fpsN); fpsAcc = fpsN = 0; fpsAt = t; }
+  if (t - fpsAt > 1000) {
+    fpsNow = Math.round(fpsAcc/fpsN); fpsAcc = fpsN = 0; fpsAt = t;
+    if (toonDogVisible) $('dogSpriteWrap').dataset.toonFps=String(fpsNow);
+  }
   requestAnimationFrame(loop);
 }
 // 운영·QA 전용 읽기 인터페이스: 개인영상·음성·랜드마크는 노출하지 않는다.
@@ -4157,6 +4369,12 @@ window.__MUNG__ = {
     success:session?.success || 0, errors:session?.errors || 0, character:breedKey,
     companion:{...companionState}, dogPose:dogSpritePose, dogFrame:dogFrameIndex,
     dogSourceFrame, motionFps:MOTION_FPS,
+    toonDog:{ ready:toonDogReady, visible:toonDogVisible, failed:toonDogFailed,
+      pose:toonDogPose, frame:toonDogFrame, poseHz:TOON_DOG_POSE_HZ,
+      contactHz:TOON_DOG_CONTACT_HZ, renderedFrames:toonDogRenderedFrames,
+      triangles:toonDogStats.triangles, drawCalls:toonDogStats.drawCalls,
+      quality:toonDogStats.quality, sharedDepth:toonDogStats.sharedDepth,
+      failure:toonDogStats.failure },
     expected:currentStepDef()?.expected || null, awaitingPraise,
     handVisualActive:!!(handSnap && performance.now()-handSnap.ts<900), handKnown:!!handSnap?.known,
     hand3d:{ ready:hand3dReady, opacity:hand3dOpacity, z:Math.round(hand3dPose.z*100)/100,
@@ -4195,7 +4413,7 @@ window.__MUNG__ = {
     handRealtime:{ presence:Math.round(handPresence*100)/100, tracking:!!currentSimulationHand(),
       curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate,
       infPath, infHz, infMs, e2eMs:Math.round(e2eMs), e2eSrc,
-      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v15-responsive-dog' },
+      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v16-3d-cel-dog' },
     palmSync:{ phase:palmSync.phase, ratio:Math.round(palmSync.ratio*100)/100,
       matched:palmSync.matched, held:Math.round(palmSync.t*100)/100, need:PALMSYNC_SEC,
       done:palmSync.done, hint:palmSync.hint, samples:palmSync.sd.length,
