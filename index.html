@@ -992,6 +992,7 @@ function beginSimulation(manual=false) {
   simExperience.trust=0; simExperience.score=0; simExperience.combo=1; simExperience.baselineFaceScale=0;
   document.body.classList.toggle('sensorActive',!manual);
   setSimulationPhase(Number.isFinite(requestedSimPhase) && requestedSimPhase>=0 ? requestedSimPhase : 0,'start');
+  setTimeout(()=>showSimulationReward('MISSION START','마음을 여는 첫 인사'),140);
 }
 function simulationWarn(reason='fast_approach') {
   if (performance.now()<simExperience.warningUntil) return;
@@ -2058,7 +2059,6 @@ function useButtonMode() {
   voiceEnabled = false; if (rec) try { rec.stop(); } catch(e) {}
   videoReady = false; dot('dCam', false); dot('dMic', false);
   beginSimulation(true);
-  toast('2.5D 시연 모드를 시작합니다.');
 }
 
 async function useCameraMode() {
