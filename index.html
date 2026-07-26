@@ -2118,11 +2118,20 @@ const wantGpu = new URLSearchParams(location.search).get('delegate')==='gpu';
     dot('dFace', true);
   } catch(e) { toast('손짓 인식 로드 실패 — 인터넷 확인'); }
 })();
+/* 손 전체 21점의 평균은 손가락을 굽히기만 해도 이동한다. 화면 속 손의 위치·크기는
+   손목과 MCP 4점으로 만든 손바닥 강체를 기준으로 잡아 제스처와 이동을 분리한다. */
+const PALM_ANCHOR_IDS = [0,5,9,13,17];
+const PALM_BASELINES = [[0,9],[0,5],[0,17],[5,17]];
+function handPalmMetrics(pts) {
+  if (!pts || pts.length<18) return null;
+  let sx=0, sy=0;
+  for (const i of PALM_ANCHOR_IDS){ sx+=pts[i].x; sy+=pts[i].y; }
+  const spans=PALM_BASELINES.map(([a,b])=>Math.hypot(pts[b].x-pts[a].x,pts[b].y-pts[a].y));
+  return { x:sx/PALM_ANCHOR_IDS.length, y:sy/PALM_ANCHOR_IDS.length,
+           extent:(medianOf(spans)||0)*3.05 };
+}
 function handCenter() {
-  if (!handSnap) return null;
-  let sx = 0, sy = 0;
-  for (const p of handSnap.pts) { sx += p.x; sy += p.y; }
-  return { x: sx/handSnap.pts.length, y: sy/handSnap.pts.length };
+  return handPalmMetrics(handSnap?.pts);
 }
 function fireBurst() {
   const c = handCenter();
@@ -2169,12 +2178,13 @@ class OneEuro {
 }
 const oePts=[], oePts3=[];
 for (let i=0;i<21;i++){
-  oePts.push({ x:new OneEuro(1.6,.006), y:new OneEuro(1.6,.006) });                     // 화면 px
+  oePts.push({ x:new OneEuro(1.9,.025), y:new OneEuro(1.9,.025) });                    // 화면 px
   oePts3.push({ x:new OneEuro(1.3,.09), y:new OneEuro(1.3,.09), z:new OneEuro(1.0,.06) }); // 정규화·깊이
 }
+const handDistFilter = new OneEuro(1.9,.32);                                           // 카메라~손 거리(m)
 let oeLastSeen=0;
 function resetHandFilters(){ for (let i=0;i<21;i++){ oePts[i].x.reset(); oePts[i].y.reset();
-  oePts3[i].x.reset(); oePts3[i].y.reset(); oePts3[i].z.reset(); } }
+  oePts3[i].x.reset(); oePts3[i].y.reset(); oePts3[i].z.reset(); } handDistFilter.reset(); }
 /* 인식 계측 */
 let infMs=0, infHz=0, infCount=0, infCountAt=0, infPath='main', e2eMs=0, e2eSrc='infer';
 /* ─── 절대 깊이: worldLandmarks(미터 근사)로 사용자 손 크기를 학습하고, 화면상 손바닥 각크기와
@@ -2548,12 +2558,26 @@ const HAND3D_ORIENT = [-Math.PI/2, 0, 0];
 const HAND3D_BASE_TILT = (()=>{ const v=parseFloat(new URLSearchParams(location.search).get('handTilt'));
   return Number.isFinite(v) ? v : 2.05; })();    // 뷰 공간 기울기 보정 (실측 확정 · ?handTilt= 로 튜닝)
 const HAND3D_GRAB_FROM_OPEN = true;       // GrabHold가 펴짐→쥠 방향인지 여부
-/* ★깊이→크기 (2026-07-25): 원근만으로는 사용 구간에서 크기 변화가 1.2배도 안 돼
-   "강아지를 만진다"는 감각이 죽는다. 렌더 깊이에서 목표 화면 높이 비율을 직접 정한다. */
-const HAND3D_SIZE_NEAR = .86;             // 창문 바로 앞 = 화면 높이의 86%
-const HAND3D_SIZE_FAR  = .175;            // 장면 가장 깊은 지점 = 17.5% (약 4.9배 변화)
-/* v12.1: 게임 HUD 작업에서 근거리 상한을 모바일 64%/데스크톱 72%로 낮춘 결과, 실제 z 이동은
-   남아 있어도 가장 강한 깊이 단서인 크기 대비가 약해졌다. 검증된 v11.2 범위를 복원한다. */
+/* 깊이는 접촉·가림·그림자로 충분히 읽힌다. 손 크기를 4.9배로 늘리던 이전 규칙은 1cm 깊이
+   잡음도 수십 px의 크기 튐으로 증폭했다. 실제 팔을 뻗을 때의 각크기 변화에 가까운 1.6배로
+   제한하고, 모바일은 손이 화면을 덮지 않도록 별도 상한을 둔다. */
+const HAND3D_SIZE_NEAR = .50;
+const HAND3D_SIZE_FAR = .30;
+const HAND3D_SIZE_NEAR_MOBILE = .50, HAND3D_SIZE_FAR_MOBILE = .30;
+function handSizeTarget(zn, mobile=innerWidth<760){
+  const q=clamp01(zn), e=q*q*(3-2*q);
+  const near=mobile?HAND3D_SIZE_NEAR_MOBILE:HAND3D_SIZE_NEAR;
+  const far=mobile?HAND3D_SIZE_FAR_MOBILE:HAND3D_SIZE_FAR;
+  return near+(far-near)*e;
+}
+function stableScalarStep(current,target,dt,deadband,response,maxRate){
+  const d=target-current;
+  if (Math.abs(d)<=deadband) return current;
+  const active=d-Math.sign(d)*deadband;
+  const wanted=active*(1-Math.exp(-Math.max(.001,dt)*response));
+  const cap=maxRate*Math.max(.001,dt);
+  return current+Math.max(-cap,Math.min(cap,wanted));
+}
 const HAND3D_MODEL_H   = 1.35;            // 정규화된 모델 최대 치수 (아래 fixStep 1과 반드시 동일)
 let hand3dRenderer=null, hand3dScene=null, hand3dShadowScene=null, hand3dCam=null;
 let hand3dRoot=null, hand3dOrient=null, hand3dInner=null, hand3dReady=false, hand3dMats=[], hand3dPrepass=null;
@@ -2577,10 +2601,10 @@ const hand3dDepth = { ratio:.5, min:null, max:null, buf:[], bufN:0,
 /* ─── 고정 물리 매핑 ───
    예전에는 관측된 최소~최대를 장면 깊이 전체로 늘렸다(스트레치). 감도는 좋았지만 범위가
    계속 변하니 "같은 자리에 손을 두어도 매번 다른 깊이"가 되어 강아지를 만지는 지점이
-   고정되지 않았다. 이제 전진 거리 30cm를 항상 깊이 전체에 대응시키고, 사람마다 다른
+   고정되지 않았다. 이제 전진 거리 24cm를 항상 깊이 전체에 대응시키고, 사람마다 다른
    '휴식 위치'만 느리게 배운다. 손이 앞쪽(접촉 구간)에 있을 때는 기준을 갱신하지 않으므로
    쓰다듬는 중에 기준이 밀려나지 않는다. */
-const HAND3D_SPAN_M = .155;                // 깊이 전체에 대응하는 실제 전진 거리(m) — v11.2: 30→22→19→15.5cm (감도↑)
+const HAND3D_SPAN_M = .24;                 // 휴식→완전 전진 24cm: 팔 동작은 살아 있고 1cm 잡음은 과증폭하지 않음
 const HAND3D_REST_MIN = .26, HAND3D_REST_MAX = .95;   // 휴식(먼 끝) 기준의 허용 범위(m)
 const HAND3D_DEPTH_MIN_SPAN = .04;
 const HAND3D_ABS_MIN_SPAN = .12;          // 절대 깊이: 12cm 이상 왕복하면 개인 도달범위로 스트레치
@@ -2618,6 +2642,8 @@ function learnDepth(sig, palmLen, ts){
   // 원신호 선택: 절대 깊이(미터)가 있으면 그것을, 없으면 손바닥 길이 비율
   let raw, zn;
   if (sig && Number.isFinite(sig.distM)) {
+    const enteringAbs=hand3dDepth.unit!=='abs';
+    if (enteringAbs) handDistFilter.reset();
     // ① 물리 범위 클램프 ② 슬루율 제한(3m/s) — 단일 프레임 추정 오차가 깊이를 튀게 하는 것을 막는다.
     let d=Math.max(HAND3D_DIST_MIN, Math.min(HAND3D_DIST_MAX, sig.distM));
     if (d!==sig.distM) hand3dDepth.clampN++;
@@ -2628,7 +2654,8 @@ function learnDepth(sig, palmLen, ts){
       if (lim!==d) hand3dDepth.clampN++;
       d=lim;
     }
-    if (hand3dDepth.unit!=='abs'){ hand3dDepth.min=null; hand3dDepth.max=null; hand3dDepth.buf.length=0; }
+    d=handDistFilter.f(d,ts);
+    if (enteringAbs){ hand3dDepth.min=null; hand3dDepth.max=null; hand3dDepth.buf.length=0; }
     hand3dDepth.unit='abs'; hand3dDepth.absAt=ts; hand3dDepth.rawDist=d; hand3dDepth.distM=Math.round(d*1000)/1000;
     hand3dDepth.personalized=!!sig.personalized; hand3dDepth.fore=sig.fore||1;
     hand3dDepth.src=sig.src||''; hand3dDepth.rms=sig.rms==null?null:sig.rms;
@@ -2690,8 +2717,8 @@ function learnDepth(sig, palmLen, ts){
   else hand3dDepth.frozen++;
   if (hand3dDepth.lastTs){
     const dts=Math.max(.012,(ts-hand3dDepth.lastTs)/1000);
-    const v=(hand3dDepth.ratio-prevRatio)/dts;
-    hand3dDepth.vel+=(v-hand3dDepth.vel)*.35;              // 깊이 속도(지연 예측용)
+    const v=Math.max(-2.4,Math.min(2.4,(hand3dDepth.ratio-prevRatio)/dts));
+    hand3dDepth.vel+=(v-hand3dDepth.vel)*.28;              // 깊이 속도(짧고 제한된 지연 예측용)
   }
   hand3dDepth.zn=zn; hand3dDepth.lastZn=zn; hand3dDepth.lastTs=ts;
 }
@@ -3314,11 +3341,11 @@ function tickHand3D(dt){
     if (hand.actual){
       // ★창문 모델: 실제 손이 화면에 다가갈수록 화면 속 손은 장면 깊숙이 들어가 치와와에게 간다.
       // 지연 보상: 인식 프레임 이후 흐른 시간만큼 깊이 속도로 앞질러 예측 (최대 110ms)
-      const dAge=hand3dDepth.lastTs ? Math.min(.11,(performance.now()-hand3dDepth.lastTs)/1000) : 0;
-      const ratioPred=clamp01(hand3dDepth.ratio+(hand3dDepth.vel||0)*dAge*.6);
+      const dAge=hand3dDepth.lastTs ? Math.min(.045,(performance.now()-hand3dDepth.lastTs)/1000) : 0;
+      const ratioPred=clamp01(hand3dDepth.ratio+(hand3dDepth.vel||0)*dAge*.22);
       /* ★v11: 중심 증폭(±1.7 클리핑)을 버렸다. 그 방식은 양 끝 각 4.5cm를 죽은 구간으로 만들어
          "끝까지 밀어도 더 안 들어간다"는 바로 그 증상을 만들었다. 이제 물리 비율을 그대로 쓴다:
-         휴식 위치 → 22cm 전진이 장면 깊이 전체(창문 앞 → 꼬리 뒤)에 1:1 대응하고, 죽은 구간이 없다. */
+         휴식 위치 → 24cm 전진이 장면 깊이 전체(창문 앞 → 꼬리 뒤)에 1:1 대응하고, 죽은 구간이 없다. */
       const znRaw=clamp01(ratioPred);
       // 비선형 커브: 멀리선 빠르게 들어가고, 강아지 근처에선 미세 제어 (만지기 직전 정밀 뎁스)
       const zn=1-Math.pow(1-znRaw,1.35);
@@ -3326,7 +3353,7 @@ function tickHand3D(dt){
       hand3dZnT=znRaw;   // ★크기는 접촉 클램프 전 원본 깊이로 (닿는 동안 크기가 굳으면 감각이 죽는다)
       // ★v11 리치 마그넷: 조준점이 깊이에 따라 머리 → 몸통 → 꼬리로 이동한다
       const dp=dogReachAim(znRaw, nx*innerWidth, ny*innerHeight);
-      const magnet=clamp01((znRaw-.44)/.56)*.58;   // v11.2: 더 일찍·더 강하게 강아지로 끌린다
+      const magnet=clamp01((znRaw-.48)/.52)*.22;   // 보조 조준만 제공하고 실제 손 위치가 항상 우선
       nx+=(dp.x/innerWidth-nx)*magnet;
       ny+=(dp.y/innerHeight-ny)*magnet;
       // ★접촉: 강아지 곡면(머리·몸통)에 닿으면 표면을 따라 미끄러지며 멈춘다 (통과 방지)
@@ -3367,14 +3394,16 @@ function tickHand3D(dt){
   } else {
     nx=.72; ny=.84; targetZ=2.1; targetRz=-.18+Math.sin(restBob*1.2)*.03;  // 휴식 자세
   }
-  const kPos=1-Math.exp(-Math.max(.001,dt)*(tracking?13:4.5));
+  const kPos=1-Math.exp(-Math.max(.001,dt)*(tracking?32:4.5));
   const kZ=1-Math.exp(-Math.max(.001,dt)*9);     // z 반응 가속 (감도↑)
   hand3dPose.z+=(targetZ-hand3dPose.z)*kZ;
   // 실추적이 아닌 분기(시연·홀드·휴식)는 목표 z에서 정규화 깊이를 역산해 같은 크기 규칙을 태운다
   // 비추적 분기(휴식·홀드·시연)에서도 크기가 z와 어긋나지 않게 위 매핑을 정확히 역산한다
   if (!(tracking && hand.actual))
     hand3dZnT=1-Math.pow(clamp01(1-(3.9-targetZ)/3.72), 1/1.35);
-  hand3dZn+=(hand3dZnT-hand3dZn)*kZ;
+  const touchingForScale=hand3dTouch.strength>.2;
+  hand3dZn=stableScalarStep(hand3dZn,hand3dZnT,dt,
+    touchingForScale?.022:.012, touchingForScale?4.2:8.5, touchingForScale?.5:1.25);
   const w=hand3dWorldFromScreen(nx,ny,hand3dPose.z);
   hand3dPose.x+=(w.x-hand3dPose.x)*kPos;
   hand3dPose.y+=(w.y-hand3dPose.y)*kPos;
@@ -3405,21 +3434,12 @@ function tickHand3D(dt){
     for (const f of Object.keys(hand3dPose.curls)) applyFingerCurl(f,hand3dPose.curls[f]);
     // 접촉 스쿼시: 손바닥 법선(로컬 z) 방향으로 눌리고 옆으로 살짝 퍼진다 → "닿았다"는 감각
     const e=hand3dTouch.strength*(.05+hand3dTouch.press*.06);
-    /* ★깊이→크기: 정규화 깊이(hand3dZn)로 화면 높이 대비 목표 크기를 직접 정하고, 원근이 이미
-       주는 크기(natural)로 나눠 배율을 낸다. 렌더 z가 아니라 접촉 클램프 전 원본 깊이를 쓰므로
-       강아지에 닿아 z가 멈춘 뒤에도 크기가 굳지 않는다. 창문 모델(깊이 들어갈수록 = 강아지에
-       가까울수록 작아진다)은 그대로.
-       ★v11 수정 — '끝에서 아무 일도 안 일어나는' 문제:
-       예전엔 ① 깊이 0.92부터는 크기 계산이 포화(deadband 0.08+0.84)돼 더 밀어도 변화가 없었고,
-       ② smoothstep이 양쪽 끝에서 기울기 0이라 마지막 10% 구간의 크기 변화가 4.6%에 불과했다.
-       실제로 손을 끝까지 밀면 "더는 안 들어간다"고 느껴진 결정적 이유다.
-       이제 ① 0.06~1.0 전 구간을 쓰고 ② 끝에서 기울기가 살아있는 ease-in 곡선(qs²(2-qs))으로
-       바꿔 같은 마지막 10%에서 16% 줄어든다 — 꼬리에 다가갈수록 오히려 변화가 또렷해진다. */
-    const qs=clamp01((hand3dZn-.06)/.94);
-    const frac=HAND3D_SIZE_NEAR+(HAND3D_SIZE_FAR-HAND3D_SIZE_NEAR)*(qs*qs*(2-qs));
+    /* 3D 위치는 즉시 따라가되 보이는 크기는 별도의 데드밴드·속도 제한을 거친다.
+       접촉 중에는 더 천천히 변해 쓰다듬는 손이 강아지 위에서 펌핑하지 않는다. */
+    const frac=handSizeTarget(hand3dZn,innerWidth<760);
     const dCam=Math.max(.35,hand3dCam.position.z-hand3dPose.z);
     const natural=HAND3D_MODEL_H/(2*Math.tan(HAND3D_FOV*Math.PI/360)*dCam);   // 원근만의 화면높이 비율
-    const mul=Math.max(.35,Math.min(2.2,frac/natural));
+    const mul=Math.max(.16,Math.min(2.2,frac/natural));
     hand3dSizeFrac=frac; hand3dSizeMul=mul;
     hand3dRoot.scale.set((1+e*.55)*mul, (1+e*.55)*mul, (1-e)*mul);
     // 보조 깊이 단서: 깊이 들어갈수록 살짝 어두워진다 (불투명도는 '강아지 우선' 규칙대로 건드리지 않음)
@@ -3475,15 +3495,23 @@ function updateHandTrack(dt) {
   const snap=handSnap && now-handSnap.ts<handSnapMaxAge() ? handSnap : null;  // ★인식 간격에 맞춘 유효시간
   palmSyncTick(dt, now, snap);            // 3초 손바닥 동기화 (진행 중일 때만 동작)
   if (snap) {
-    const c=handCenter();
-    const xs=snap.pts.map(p=>p.x), ys=snap.pts.map(p=>p.y);
-    const extent=Math.max(Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys));
+    const c=handPalmMetrics(snap.pts);
+    if (!c) return;
+    const extent=c.extent;
     const wrist=snap.pts[0], middle=snap.pts[9] || c;
     const angle=Math.atan2(middle.y-wrist.y,middle.x-wrist.x)+Math.PI/2;
+    let reacquired=false;
     if (snap.ts!==handTrack.lastTs) {                     // 새 인식 프레임 → 속도 갱신
+      reacquired=!handTrack.lastTs || snap.ts-handTrack.lastTs>500;
       if (handTrack.prev) {
         const dts=Math.max(.012,(snap.ts-handTrack.prev.ts)/1000);
-        handTrack.vx=(c.x-handTrack.prev.x)/dts; handTrack.vy=(c.y-handTrack.prev.y)/dts;
+        const cap=Math.max(innerWidth,innerHeight)*4;
+        const rvx=Math.max(-cap,Math.min(cap,(c.x-handTrack.prev.x)/dts));
+        const rvy=Math.max(-cap,Math.min(cap,(c.y-handTrack.prev.y)/dts));
+        const kV=1-Math.exp(-dts*12);
+        handTrack.vx+=(rvx-handTrack.vx)*kV; handTrack.vy+=(rvy-handTrack.vy)*kV;
+      } else {
+        handTrack.vx=0; handTrack.vy=0;
       }
       handTrack.prev={x:c.x,y:c.y,ts:snap.ts};
       handTrack.lastTs=snap.ts;
@@ -3501,12 +3529,15 @@ function updateHandTrack(dt) {
       const lag=now-snap.ts;
       e2eMs = e2eMs ? e2eMs+(lag-e2eMs)*.2 : lag;
     }
-    const ahead=Math.min(.12,(now-snap.ts)/1000);         // 인식 공백은 최대 120ms 속도 예측으로 메꿈
-    const px=c.x+handTrack.vx*ahead*.55, py=c.y+handTrack.vy*ahead*.55;
-    const kPos=1-Math.exp(-dt*16), kSlow=1-Math.exp(-dt*10);
-    handTrack.x=handTrack.x?handTrack.x+(px-handTrack.x)*kPos:px;
-    handTrack.y=handTrack.y?handTrack.y+(py-handTrack.y)*kPos:py;
-    handTrack.extent+=(extent-handTrack.extent)*kSlow;
+    const ahead=Math.min(.05,(now-snap.ts)/1000);         // 짧고 제한된 예측만 사용해 멈출 때 오버슈트 방지
+    const maxPred=Math.max(8,Math.min(22,Math.min(innerWidth,innerHeight)*.025));
+    const predX=Math.max(-maxPred,Math.min(maxPred,handTrack.vx*ahead*.32));
+    const predY=Math.max(-maxPred,Math.min(maxPred,handTrack.vy*ahead*.32));
+    const px=c.x+predX, py=c.y+predY;
+    const kPos=1-Math.exp(-dt*26), kSlow=1-Math.exp(-dt*8);
+    if (reacquired || !handTrack.x){ handTrack.x=px; handTrack.y=py; }
+    else { handTrack.x+=(px-handTrack.x)*kPos; handTrack.y+=(py-handTrack.y)*kPos; }
+    handTrack.extent=handTrack.extent?handTrack.extent+(extent-handTrack.extent)*kSlow:extent;
     handTrack.angle+=(angle-handTrack.angle)*kSlow;
     handTrack.curl+=(handTrack.curlRaw-handTrack.curl)*(1-Math.exp(-dt*12));
     if (handTrack.curlsRaw){
@@ -4027,7 +4058,7 @@ window.__MUNG__ = {
     handRealtime:{ presence:Math.round(handPresence*100)/100, tracking:!!currentSimulationHand(),
       curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate,
       infPath, infHz, infMs, e2eMs:Math.round(e2eMs), e2eSrc,
-      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v13-first-person-hand-frame' },
+      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v14-palm-physics' },
     palmSync:{ phase:palmSync.phase, ratio:Math.round(palmSync.ratio*100)/100,
       matched:palmSync.matched, held:Math.round(palmSync.t*100)/100, need:PALMSYNC_SEC,
       done:palmSync.done, hint:palmSync.hint, samples:palmSync.sd.length,

@@ -63,9 +63,37 @@ assert.match(
 const near = Number(html.match(/const HAND3D_SIZE_NEAR = ([.\d]+)/)?.[1]);
 const far = Number(html.match(/const HAND3D_SIZE_FAR\s+= ([.\d]+)/)?.[1]);
 assert.ok(Number.isFinite(near) && Number.isFinite(far), 'depth size constants must be readable');
-assert.ok(near >= 0.84, `near hand size must restore strong depth; got ${near}`);
-assert.ok(far <= 0.18, `far hand size must reach deep into the room; got ${far}`);
-assert.ok(near / far >= 4.7, `depth size contrast must be at least 4.7×; got ${(near / far).toFixed(2)}×`);
+assert.ok(near >= 0.46 && near <= 0.56, `desktop near size must stay first-person but bounded; got ${near}`);
+assert.ok(far >= 0.27 && far <= 0.34, `desktop reach size must stay readable; got ${far}`);
+assert.ok(near / far >= 1.45 && near / far <= 1.85,
+  `depth size contrast must be physically plausible; got ${(near / far).toFixed(2)}×`);
+
+assert.match(
+  html,
+  /const PALM_ANCHOR_IDS = \[0,5,9,13,17\]/,
+  'screen position must follow the rigid palm instead of all 21 articulated landmarks'
+);
+assert.match(
+  html,
+  /const maxPred=Math\.max\(8,Math\.min\(22,/,
+  'latency prediction must be pixel-capped so stopping cannot overshoot'
+);
+assert.match(
+  html,
+  /stableScalarStep\(hand3dZn,hand3dZnT,dt,/,
+  'visual hand size must have an independent deadband and slew limiter'
+);
+
+const smoothstep = q => q*q*(3-2*q);
+const sizeAt = z => near+(far-near)*smoothstep(Math.max(0,Math.min(1,z)));
+assert.ok(sizeAt(0) > sizeAt(1), 'first-person reach must still get smaller with depth');
+const jitterPx = Math.abs(sizeAt(.48)-sizeAt(.52))*720;
+assert.ok(jitterPx < 12, `±2% depth noise must stay below 12px before temporal filtering; got ${jitterPx.toFixed(1)}px`);
+assert.match(
+  html,
+  /const HAND3D_SIZE_NEAR_MOBILE = \.50, HAND3D_SIZE_FAR_MOBILE = \.30/,
+  'mobile hand must not cover the dog with a larger viewport fraction'
+);
 
 assert.match(
   html,
