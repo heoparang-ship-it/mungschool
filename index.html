@@ -478,6 +478,55 @@
   .simStep.done,.simStep.active { color:#286f61; }
   .simStep.done i { border-color:var(--sim-mint); background:var(--sim-mint); box-shadow:0 0 0 3px rgba(101,205,181,.14); }
   .simStep.active i { border-color:#fff; background:var(--sim-mint); box-shadow:0 0 0 4px rgba(101,205,181,.22),0 3px 9px rgba(35,123,108,.24); }
+  #gameHud {
+    position:fixed; z-index:18; left:28px; top:70px; width:292px; padding:14px 15px 13px;
+    color:var(--sim-ink); background:linear-gradient(145deg,rgba(255,255,255,.91),rgba(244,252,247,.78));
+    border:1px solid rgba(80,169,146,.27); border-radius:20px; pointer-events:none;
+    box-shadow:0 18px 42px rgba(51,76,69,.14),inset 0 1px 0 rgba(255,255,255,.95); backdrop-filter:blur(14px);
+  }
+  #gameHud::before {
+    content:''; position:absolute; left:0; top:18px; bottom:18px; width:4px; border-radius:0 5px 5px 0;
+    background:linear-gradient(180deg,var(--sim-mint),#f1b865); box-shadow:0 0 18px rgba(101,205,181,.35);
+  }
+  #missionKicker { display:flex; align-items:center; justify-content:space-between; color:#2b7668; font-size:9px; font-weight:1000; letter-spacing:.14em; }
+  #missionKicker span { color:#8ba79f; letter-spacing:.08em; }
+  #missionMain { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-top:7px; }
+  #missionTitle { display:block; color:#173f37; font-size:20px; line-height:1.05; font-weight:1000; letter-spacing:-.7px; }
+  #missionObjective { display:block; margin-top:4px; color:#6d8b83; font-size:10px; line-height:1.35; font-weight:800; }
+  #missionScore { flex:0 0 auto; color:#e09a49; font:1000 18px/1 ui-rounded,'SF Pro Rounded',sans-serif; letter-spacing:.04em; }
+  #missionScore::before { content:'SCORE'; display:block; margin-bottom:3px; color:#9bb1aa; font-size:7px; letter-spacing:.14em; text-align:right; }
+  #trustLine { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; margin-top:12px; color:#47746a; font-size:9px; font-weight:1000; }
+  #simTrustTrack { height:8px; overflow:hidden; border-radius:999px; background:#dceae3; box-shadow:inset 0 1px 2px rgba(50,93,81,.12); }
+  #simTrustBar { width:0; height:100%; border-radius:999px; background:linear-gradient(90deg,#59cdb2,#86dfb4 63%,#ffc568); transition:width .28s ease-out; box-shadow:0 0 12px rgba(89,205,178,.34); }
+  #missionGoals { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:11px; }
+  .missionGoal { position:relative; min-height:34px; padding:7px 5px 6px 25px; border-radius:10px; color:#77938c; background:rgba(224,241,233,.68); font-size:8px; font-weight:900; line-height:1.2; }
+  .missionGoal::before { content:'○'; position:absolute; left:8px; top:8px; color:#93b4ab; font-size:11px; }
+  .missionGoal.done { color:#246b5d; background:rgba(101,205,181,.16); }
+  .missionGoal.done::before { content:'✓'; color:#2aa98b; }
+  .missionGoal.active { color:#8a5a21; background:rgba(255,197,104,.18); box-shadow:inset 0 0 0 1px rgba(234,164,76,.2); }
+  .missionGoal.active::before { content:'◆'; color:#e4a04f; font-size:8px; top:10px; }
+  #comboBadge {
+    position:fixed; z-index:17; right:29px; top:76px; min-width:84px; padding:10px 12px; border-radius:16px;
+    color:#416d64; background:rgba(255,255,255,.76); border:1px solid rgba(80,169,146,.23);
+    box-shadow:0 10px 28px rgba(56,102,89,.1); backdrop-filter:blur(12px); text-align:center; pointer-events:none;
+  }
+  #comboBadge strong { display:block; color:#e09a49; font:1000 18px/1 ui-rounded,'SF Pro Rounded',sans-serif; }
+  #comboBadge span { display:block; margin-top:3px; color:#819d96; font-size:8px; font-weight:1000; letter-spacing:.1em; }
+  #simReward {
+    position:fixed; z-index:30; left:50%; top:39%; transform:translate(-50%,12px) scale(.78); opacity:0; pointer-events:none;
+    min-width:230px; padding:12px 18px; border-radius:18px; color:#fff; text-align:center;
+    background:linear-gradient(135deg,rgba(34,122,104,.94),rgba(57,169,141,.92)); border:2px solid rgba(255,255,255,.75);
+    box-shadow:0 18px 45px rgba(30,93,78,.28),0 0 34px rgba(101,205,181,.3);
+  }
+  #simReward strong { display:block; color:#fff3b3; font-size:20px; font-weight:1000; letter-spacing:-.4px; }
+  #simReward span { display:block; margin-top:2px; color:#e7fff7; font-size:10px; font-weight:900; }
+  #simReward.show { animation:simRewardRise 1.15s cubic-bezier(.16,.84,.24,1) 1; }
+  @keyframes simRewardRise {
+    0%{opacity:0;transform:translate(-50%,20px) scale(.72)}
+    18%{opacity:1;transform:translate(-50%,-5px) scale(1.05)}
+    72%{opacity:1;transform:translate(-50%,-9px) scale(1)}
+    100%{opacity:0;transform:translate(-50%,-54px) scale(.96)}
+  }
   #simDogState {
     position:fixed; z-index:17; left:50%; top:27%; transform:translate(-50%,-50%);
     padding:7px 13px; border-radius:999px; color:#336c61; background:rgba(255,255,255,.82);
@@ -509,8 +558,22 @@
     filter:drop-shadow(0 22px 22px rgba(58,91,79,.13));
     transition:left .5s cubic-bezier(.2,.8,.2,1),top .5s cubic-bezier(.2,.8,.2,1),width .5s cubic-bezier(.2,.8,.2,1);
   }
+  body.virtualMode #dogSpriteWrap::before {
+    content:''; position:absolute; z-index:-1; left:20%; right:20%; bottom:8%; height:12%; border-radius:50%;
+    background:radial-gradient(ellipse,rgba(39,76,65,.32),rgba(53,103,88,.12) 52%,transparent 75%);
+    filter:blur(7px); transform:perspective(500px) rotateX(67deg) scale(var(--dog-shadow-scale,1));
+    opacity:var(--dog-shadow-opacity,.62); transition:transform .45s,opacity .45s;
+  }
   body.virtualMode #dogSprite { filter:drop-shadow(0 22px 15px rgba(42,78,66,.18)); }
-  body.virtualMode #dogAura { bottom:5%; background:radial-gradient(ellipse,rgba(101,205,181,.31),rgba(101,205,181,.06) 58%,transparent 74%); border-color:rgba(101,205,181,.52); }
+  body.virtualMode #dogAura {
+    bottom:5%; background:radial-gradient(ellipse,rgba(101,205,181,.31),rgba(101,205,181,.06) 58%,transparent 74%);
+    border-color:rgba(101,205,181,.52); animation:dogAuraPulse 2.4s ease-in-out infinite;
+  }
+  body.virtualMode.phaseApproach #dogAura { border-color:rgba(255,191,96,.72); background:radial-gradient(ellipse,rgba(255,196,105,.3),rgba(101,205,181,.08) 58%,transparent 74%); }
+  body.virtualMode.phaseBonded #dogAura { border-color:rgba(255,207,110,.92); box-shadow:0 0 30px rgba(255,202,102,.32); animation-duration:1.1s; }
+  body.virtualMode.dogPhaseUp #dogSpriteWrap { animation:dogPhaseUp .65s cubic-bezier(.16,.84,.24,1) 1; }
+  @keyframes dogAuraPulse { 0%,100%{opacity:.64;filter:blur(.1px)} 50%{opacity:1;filter:drop-shadow(0 0 9px rgba(101,205,181,.24))} }
+  @keyframes dogPhaseUp { 0%{transform:translate(-50%,-50%) scale(.97)} 45%{transform:translate(-50%,-54%) scale(1.045)} 100%{transform:translate(-50%,-50%) scale(1)} }
   body.virtualMode .modal { background:rgba(226,242,232,.72); backdrop-filter:blur(14px); }
   body.virtualMode .modalCard {
     color:var(--sim-ink); background:rgba(255,253,247,.94); border-color:rgba(80,169,146,.24);
@@ -527,7 +590,20 @@
     #simSensorLine { left:auto; right:12px; top:12px; transform:none; min-width:0; padding:7px 10px; font-size:9px; }
     #simProgress { left:12px; right:12px; top:51px; justify-content:center; padding:7px 9px; }
     .simStep { font-size:9px; }
-    #simDogState { top:25%; font-size:10px; }
+    #gameHud { left:12px; right:12px; top:91px; width:auto; padding:10px 12px 9px; border-radius:16px; }
+    #missionKicker { font-size:7px; }
+    #missionMain { margin-top:4px; align-items:center; }
+    #missionTitle { font-size:15px; }
+    #missionObjective { display:none; }
+    #missionScore { font-size:15px; }
+    #trustLine { margin-top:7px; }
+    #missionGoals { margin-top:7px; gap:4px; }
+    .missionGoal { min-height:26px; padding:6px 4px 5px 21px; font-size:7px; border-radius:8px; }
+    .missionGoal::before { left:7px; top:6px; }
+    .missionGoal.active::before { top:8px; }
+    #comboBadge { right:13px; top:210px; min-width:64px; padding:8px 9px; border-radius:13px; }
+    #comboBadge strong { font-size:14px; }
+    #simDogState { top:29%; font-size:10px; }
     body.virtualMode #dogSpriteWrap { top:56%; width:min(370px,82vw); }
     #safeZone { top:84%; width:132vw; height:34vw; }
     #distanceTag { top:83%; font-size:9px; padding:6px 9px; }
@@ -555,6 +631,21 @@
   <span class="simStep" data-sim-step="1"><i></i>손바닥</span>
   <span class="simStep" data-sim-step="2"><i></i>교감</span>
 </div>
+<section id="gameHud" aria-label="게임 미션 상태">
+  <div id="missionKicker">MISSION 01 <span>FIRST CONTACT</span></div>
+  <div id="missionMain">
+    <div><strong id="missionTitle">마음을 여는 첫 인사</strong><small id="missionObjective">서두르지 않고 멍이의 신뢰를 얻으세요</small></div>
+    <b id="missionScore">000</b>
+  </div>
+  <div id="trustLine"><span>TRUST</span><div id="simTrustTrack"><div id="simTrustBar"></div></div><b id="simTrustValue">0%</b></div>
+  <div id="missionGoals">
+    <div class="missionGoal active" data-mission-goal="0">거리 지키기</div>
+    <div class="missionGoal" data-mission-goal="1">손바닥 신호</div>
+    <div class="missionGoal" data-mission-goal="2">교감 성공</div>
+  </div>
+</section>
+<div id="comboBadge" aria-label="연속 성공"><strong id="simCombo">×1</strong><span>GENTLE COMBO</span></div>
+<div id="simReward" role="status" aria-live="polite"><strong id="simRewardTitle">CHECKPOINT</strong><span id="simRewardSub">신뢰도 +20</span></div>
 <div id="simDogState" role="status" aria-live="polite">경계</div>
 <div id="simInstruction" role="status" aria-live="polite">50cm 시작선에서 잠시 멈춰 주세요</div>
 <div id="palmSync" role="status" aria-live="polite" hidden>
@@ -813,17 +904,42 @@ virtualHandImg.onload = () => { virtualHandReady = true; };
 const simExperience = {
   started:false, manual:false, phase:0, phaseAt:performance.now(), trust:0,
   palmHold:0, petHold:0, warningUntil:0, completed:false,
-  baselineFaceScale:0, lastFaceScale:0, lastFaceAt:0, faceSpeed:0
+  baselineFaceScale:0, lastFaceScale:0, lastFaceAt:0, faceSpeed:0,
+  score:0, combo:1
 };
 let simManualHand = { x:.72, y:.72, active:true, speed:0, lastAt:performance.now() };
 let simHandDraw = { x:innerWidth*.72, y:innerHeight*.72, size:Math.min(innerWidth,innerHeight)*.48, angle:-.18, speed:0 };
 let lastSimUiAt = 0;
 
+function showSimulationReward(title, sub) {
+  const el=$('simReward');
+  $('simRewardTitle').textContent=title; $('simRewardSub').textContent=sub;
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+}
 function setSimulationPhase(phase, reason='flow') {
   const next=Math.max(0,Math.min(4,Number(phase)||0));
+  const previous=simExperience.phase;
   simExperience.phase=next; simExperience.phaseAt=performance.now();
   simExperience.palmHold=0; simExperience.petHold=0;
+  const trustFloor=[0,8,26,72,100][next];
+  simExperience.trust=Math.max(simExperience.trust,trustFloor);
   if (next===4) simExperience.completed=true;
+  if (simExperience.started && reason!=='start' && next>previous) {
+    const gain=[0,120,180,260,500][next];
+    simExperience.score+=gain*simExperience.combo;
+    simExperience.combo=Math.min(9,simExperience.combo+1);
+    const rewards=[
+      null,
+      ['SAFE DISTANCE',`거리 확보 · +${gain}`],
+      ['PALM SIGNAL',`신뢰도 +18 · +${gain}`],
+      ['TRUST OPEN',`멍이가 다가왔어요 · +${gain}`],
+      ['MISSION CLEAR',`교감 성공 · +${gain}`]
+    ];
+    if (rewards[next]) showSimulationReward(...rewards[next]);
+    document.body.classList.remove('dogPhaseUp'); void document.body.offsetWidth; document.body.classList.add('dogPhaseUp');
+    setTimeout(()=>document.body.classList.remove('dogPhaseUp'),720);
+    ensureSfx?.(); playSfx?.(next===4?'level':'success');
+  }
   dogAnimStartedAt=performance.now(); dogFrameIndex=-1;
   updateSimulationUI(reason);
   recordEvent?.('simulation_phase',{phase:next,reason});
@@ -844,28 +960,43 @@ function updateSimulationUI(reason='tick') {
   $('simDogState').classList.toggle('warning',!!copy.warning);
   $('safeZone').classList.toggle('warning',!!copy.warning);
   $('simInstruction').textContent=copy.instruction;
+  $('missionObjective').textContent=copy.instruction;
+  const displayedTrust=Math.max(simExperience.trust,[0,8,26,72,100][simExperience.phase]);
+  $('simTrustBar').style.width=`${Math.round(displayedTrust)}%`;
+  $('simTrustValue').textContent=`${Math.round(displayedTrust)}%`;
+  $('missionScore').textContent=String(simExperience.score).padStart(3,'0');
+  $('simCombo').textContent=`×${simExperience.combo}`;
   const progressPhase=simExperience.phase<=0?0:simExperience.phase<=2?1:2;
   document.querySelectorAll('.simStep').forEach((el,index)=>{
     el.classList.toggle('done',index<progressPhase || simExperience.phase===4);
     el.classList.toggle('active',index===progressPhase && simExperience.phase<4);
   });
+  document.querySelectorAll('.missionGoal').forEach((el,index)=>{
+    el.classList.toggle('done',index<progressPhase || simExperience.phase===4);
+    el.classList.toggle('active',index===progressPhase && simExperience.phase<4);
+  });
+  document.body.classList.toggle('phaseApproach',simExperience.phase===3);
+  document.body.classList.toggle('phaseBonded',simExperience.phase===4);
   const wrap=$('dogSpriteWrap');
   const size=innerWidth<760
     ? (simExperience.phase>=3?'min(400px,88vw)':'min(370px,82vw)')
     : (simExperience.phase>=3?'min(550px,41vw)':'min(510px,38vw)');
   wrap.style.width=size;
   wrap.style.setProperty('--sim-dog-y',simExperience.phase>=3?'56%':'57%');
+  wrap.style.setProperty('--dog-shadow-scale',simExperience.phase>=3?'1.12':'1');
+  wrap.style.setProperty('--dog-shadow-opacity',simExperience.phase===4?'.78':'.62');
   if (reason==='warning') { wrap.classList.add('error'); setTimeout(()=>wrap.classList.remove('error'),800); }
 }
 function beginSimulation(manual=false) {
   simExperience.started=true; simExperience.manual=manual; simExperience.completed=false;
-  simExperience.trust=0; simExperience.baselineFaceScale=0;
+  simExperience.trust=0; simExperience.score=0; simExperience.combo=1; simExperience.baselineFaceScale=0;
   document.body.classList.toggle('sensorActive',!manual);
   setSimulationPhase(Number.isFinite(requestedSimPhase) && requestedSimPhase>=0 ? requestedSimPhase : 0,'start');
 }
 function simulationWarn(reason='fast_approach') {
   if (performance.now()<simExperience.warningUntil) return;
   simExperience.warningUntil=performance.now()+1500; simExperience.trust=Math.max(0,simExperience.trust-35);
+  simExperience.combo=1;
   simExperience.palmHold=0; simExperience.petHold=0;
   if (simExperience.phase>1) simExperience.phase=1;
   ensureSfx?.(); haptic?.([35,45,35]);
@@ -2404,17 +2535,16 @@ function fingerCurls(pts) {
    ③ 고스트: 강아지 우선 원칙 — depth-prepass로 내부 겹침 없는 균일 반투명(기본 50%).
    로드 실패(오프라인 등) 시 기존 2D 일러스트 손으로 자동 폴백. */
 const HAND3D_FOV = 38;
-const HAND3D_ORIENT = [Math.PI/2, 0, 0];  // GLB 축 보정: 손등 정면·손가락 위 (프로브로 확정)
+const HAND3D_ORIENT = [Math.PI/2, 0, 0];  // GLB 축 보정: 손가락 위. 앞·뒤는 실시간 손바닥 법선으로 결정
 const HAND3D_BASE_TILT = (()=>{ const v=parseFloat(new URLSearchParams(location.search).get('handTilt'));
   return Number.isFinite(v) ? v : 2.05; })();    // 뷰 공간 기울기 보정 (실측 확정 · ?handTilt= 로 튜닝)
 const HAND3D_GRAB_FROM_OPEN = true;       // GrabHold가 펴짐→쥠 방향인지 여부
 /* ★깊이→크기 (2026-07-25): 원근만으로는 사용 구간에서 크기 변화가 1.2배도 안 돼
    "강아지를 만진다"는 감각이 죽는다. 렌더 깊이에서 목표 화면 높이 비율을 직접 정한다. */
-const HAND3D_SIZE_NEAR = .86;             // 창문 바로 앞(손을 몸쪽으로 뺀 상태) = 화면 높이의 86%
-const HAND3D_SIZE_FAR  = .175;            // 꼬리까지 뻗은 가장 깊은 지점 = 17.5% (≈4.9배 변화)
-/* ★v11.2 (2026-07-26): 3.1배로는 "장면 안으로 들어간다"는 느낌이 안 났다. 실제 사람 손과
-   치와와 몸통의 크기비(≈.65)를 기준으로 역산하면 가장 깊은 지점의 손은 화면 높이의 17~18%가
-   맞다(강아지 몸통 270px 대비 손 158px = .58). 근거리는 86%까지 키워 왕복 대비를 4.9배로 만든다. */
+const HAND3D_SIZE_NEAR = isMobile ? .64 : .72; // 캐릭터 얼굴을 가리지 않는 근거리 상한
+const HAND3D_SIZE_FAR  = isMobile ? .15 : .165;
+/* ★v12: 깊이 대비는 유지하되 근거리 손이 치와와 얼굴과 미션 HUD를 덮지 않도록 화면별 상한을 둔다.
+   모바일 64% / 데스크톱 72%, 가장 깊은 지점 15~16.5%로 약 4.3배의 왕복 대비를 유지한다. */
 const HAND3D_MODEL_H   = 1.35;            // 정규화된 모델 최대 치수 (아래 fixStep 1과 반드시 동일)
 let hand3dRenderer=null, hand3dScene=null, hand3dShadowScene=null, hand3dCam=null;
 let hand3dRoot=null, hand3dOrient=null, hand3dInner=null, hand3dReady=false, hand3dMats=[], hand3dPrepass=null;
@@ -2849,7 +2979,11 @@ function handOrientTarget(qOut){
   if (dispHandOf(snap.handed)===HAND3D_FLIP_FOR) v.negate();
   if (u.lengthSq()<1e-8 || v.lengthSq()<1e-8) return false;
   u.normalize();
-  const n=new THREE.Vector3().crossVectors(u,v);     // 손등 법선 (중립=카메라 방향 +z)
+  /* GLB의 로컬 +y(손등)는 HAND3D_ORIENT 뒤 기저의 +z를 따른다.
+     기존 u×v는 손바닥을 보인 순간 카메라 쪽을 향해 모델 손등이 정면에 나타났다.
+     정확히 반대인 v×u를 모델 손등축에 배정해, 관찰자에게는 손바닥이 보이게 한다.
+     좌우 미러는 v에만 적용하고 여기서는 앞·뒤 축만 바로잡는다. */
+  const n=new THREE.Vector3().crossVectors(v,u);     // 모델 손등이 향할 법선 (손바닥 정면이면 카메라 반대)
   if (n.lengthSq()<1e-8) return false;
   n.normalize();
   u.sub(n.clone().multiplyScalar(u.dot(n))).normalize();   // u ⟂ n 직교화
@@ -3857,6 +3991,8 @@ window.__MUNG__ = {
       handLabel:handSnap?.handed||'', handTrue:trueHandOf(handSnap?.handed||''),
       handDisp:dispHandOf(handSnap?.handed||''), mirror:hand3dMirror, camMirror:mirrored,
       dorsalZ:Math.round(handAxisWorld(0,1,0).z*100)/100,          // >0 = 손등이 보는 사람을 향함
+      palmZ:Math.round(-handAxisWorld(0,1,0).z*100)/100,           // >0 = 손바닥이 보는 사람을 향함
+      frontSurface:handAxisWorld(0,1,0).z<0?'palm':'back',
       thumbX:Math.round(handAxisWorld(0,0,-(hand3dMirror||1)).x*100)/100,  // 엄지 쪽 화면 방향(+=오른쪽)
       fingerY:Math.round(handAxisWorld(1,0,0).y*100)/100,          // >0 = 손가락이 위를 향함
       sizeMul:Math.round(hand3dSizeMul*1000)/1000,
@@ -3875,7 +4011,7 @@ window.__MUNG__ = {
     handRealtime:{ presence:Math.round(handPresence*100)/100, tracking:!!currentSimulationHand(),
       curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate,
       infPath, infHz, infMs, e2eMs:Math.round(e2eMs), e2eSrc,
-      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v11.2-right-hand-deep-occlusion' },
+      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v12-palm-game-hud' },
     palmSync:{ phase:palmSync.phase, ratio:Math.round(palmSync.ratio*100)/100,
       matched:palmSync.matched, held:Math.round(palmSync.t*100)/100, need:PALMSYNC_SEC,
       done:palmSync.done, hint:palmSync.hint, samples:palmSync.sd.length,
@@ -3887,6 +4023,7 @@ window.__MUNG__ = {
       aimM:Math.round(palmSync.aim*1000)/1000, adapted:palmSync.adapted,
       kPx:palmSync.kPx==null?null:Math.round(palmSync.kPx*10)/10 },
     simulation:{phase:simExperience.phase,state:simulationCopy().state,trust:Math.round(simExperience.trust),
+      score:simExperience.score,combo:simExperience.combo,
       completed:simExperience.completed,manual:simExperience.manual,handVisible:!!currentSimulationHand(),cameraVisible:false},
     online:navigator.onLine, fps:fpsNow, webglReady, eventCount:eventLog.length
   }),
