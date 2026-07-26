@@ -853,6 +853,10 @@ let breedKey = 'chihuahua', trainLv = {}, stats = { cmd:0, ok:0, error:0 };
 const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || matchMedia('(pointer:coarse)').matches;
 const demoMode = new URLSearchParams(location.search).get('demo') === '1';
 const handDebugMode = new URLSearchParams(location.search).get('handDebug') === '1';
+const handDebugDepthParam = new URLSearchParams(location.search).get('debugDepth');
+const handDebugYawParam = new URLSearchParams(location.search).get('debugYaw');
+const handDebugDepth = handDebugDepthParam===null ? NaN : Number(handDebugDepthParam);
+const handDebugYaw = handDebugYawParam===null ? NaN : Number(handDebugYawParam);
 const requestedSimPhase = Number(new URLSearchParams(location.search).get('simPhase'));
 const freezeSimulation = new URLSearchParams(location.search).get('freezeSim') === '1';
 document.body.classList.toggle('demoMode', demoMode);
@@ -2129,7 +2133,8 @@ function tickHandDebug(t) {
   if (!handDebugMode) return;
   const cx=innerWidth*(.58+Math.sin(t/900)*.05), cy=innerHeight*(.58+Math.cos(t/1100)*.035);
   // 접근/후퇴 시뮬레이션: 손 크기를 주기적으로 키웠다 줄여 z깊이 파이프라인을 검증
-  const s=Math.max(72,Math.min(innerWidth,innerHeight)*.16)*(1+Math.sin(t/1200)*.45);
+  const depthWave=Number.isFinite(handDebugDepth) ? clamp01(handDebugDepth)*2-1 : Math.sin(t/1200);
+  const s=Math.max(72,Math.min(innerWidth,innerHeight)*.16)*(1+depthWave*.45);
   const offsets=[
     [0,.36],[-.22,.18],[-.34,-.02],[-.42,-.23],[-.48,-.42],
     [-.13,.05],[-.18,-.18],[-.2,-.4],[-.21,-.62],
@@ -2137,11 +2142,13 @@ function tickHandDebug(t) {
     [.13,.05],[.18,-.17],[.2,-.38],[.21,-.57],
     [.24,.15],[.34,-.02],[.4,-.2],[.44,-.37]
   ];
-  const yaw=Math.sin(t/2600)*.9;   // 손날→뒤집기 방향 회전 스윙 (3D 자세 회귀검증)
+  // debugYaw=-1..1은 QA에서 완전한 손등↔손바닥 180° 회전을 고정 재현한다.
+  const yaw=Number.isFinite(handDebugYaw) ? Math.max(-1,Math.min(1,handDebugYaw))*Math.PI : Math.sin(t/2600)*.9;
   handSnap={pts:offsets.map(([x,y])=>({x:cx+x*s,y:cy+y*s})),known:true,score:.96,
             pts3:offsets.map(([x,y])=>({x:.5+Math.cos(yaw)*x*.08, y:.55+y*.08, z:-Math.sin(yaw)*x*.08})),
             handed:'',
-            icon:'기다려',gesture:'Open_Palm',hold:(Math.sin(t/600)+1)/2,ts:performance.now(),debug:true};
+            icon:'기다려',gesture:'Open_Palm',hold:(Math.sin(t/600)+1)/2,ts:performance.now(),debug:true,
+            debugDepth:Number.isFinite(handDebugDepth)?clamp01(handDebugDepth):null};
 }
 let frameNo = 0;
 const gEvery = isMobile ? 3 : 2, fEvery = isMobile ? 8 : 6;   // 얼굴은 접근속도 판정용이라 10Hz면 충분
@@ -2535,16 +2542,18 @@ function fingerCurls(pts) {
    ③ 고스트: 강아지 우선 원칙 — depth-prepass로 내부 겹침 없는 균일 반투명(기본 50%).
    로드 실패(오프라인 등) 시 기존 2D 일러스트 손으로 자동 폴백. */
 const HAND3D_FOV = 38;
-const HAND3D_ORIENT = [Math.PI/2, 0, 0];  // GLB 축 보정: 손가락 위. 앞·뒤는 실시간 손바닥 법선으로 결정
+/* 추적 기저는 MediaPipe의 회전 방향을 그대로 유지한다. 손바닥/손등 교정은 기저를 뒤집지 않고
+   GLB의 고정 손가락축(+x)을 180° 돌려 처리해야 실제 손을 뒤집는 방향도 화면과 일치한다. */
+const HAND3D_ORIENT = [-Math.PI/2, 0, 0];
 const HAND3D_BASE_TILT = (()=>{ const v=parseFloat(new URLSearchParams(location.search).get('handTilt'));
   return Number.isFinite(v) ? v : 2.05; })();    // 뷰 공간 기울기 보정 (실측 확정 · ?handTilt= 로 튜닝)
 const HAND3D_GRAB_FROM_OPEN = true;       // GrabHold가 펴짐→쥠 방향인지 여부
 /* ★깊이→크기 (2026-07-25): 원근만으로는 사용 구간에서 크기 변화가 1.2배도 안 돼
    "강아지를 만진다"는 감각이 죽는다. 렌더 깊이에서 목표 화면 높이 비율을 직접 정한다. */
-const HAND3D_SIZE_NEAR = isMobile ? .64 : .72; // 캐릭터 얼굴을 가리지 않는 근거리 상한
-const HAND3D_SIZE_FAR  = isMobile ? .15 : .165;
-/* ★v12: 깊이 대비는 유지하되 근거리 손이 치와와 얼굴과 미션 HUD를 덮지 않도록 화면별 상한을 둔다.
-   모바일 64% / 데스크톱 72%, 가장 깊은 지점 15~16.5%로 약 4.3배의 왕복 대비를 유지한다. */
+const HAND3D_SIZE_NEAR = .86;             // 창문 바로 앞 = 화면 높이의 86%
+const HAND3D_SIZE_FAR  = .175;            // 장면 가장 깊은 지점 = 17.5% (약 4.9배 변화)
+/* v12.1: 게임 HUD 작업에서 근거리 상한을 모바일 64%/데스크톱 72%로 낮춘 결과, 실제 z 이동은
+   남아 있어도 가장 강한 깊이 단서인 크기 대비가 약해졌다. 검증된 v11.2 범위를 복원한다. */
 const HAND3D_MODEL_H   = 1.35;            // 정규화된 모델 최대 치수 (아래 fixStep 1과 반드시 동일)
 let hand3dRenderer=null, hand3dScene=null, hand3dShadowScene=null, hand3dCam=null;
 let hand3dRoot=null, hand3dOrient=null, hand3dInner=null, hand3dReady=false, hand3dMats=[], hand3dPrepass=null;
@@ -2979,11 +2988,9 @@ function handOrientTarget(qOut){
   if (dispHandOf(snap.handed)===HAND3D_FLIP_FOR) v.negate();
   if (u.lengthSq()<1e-8 || v.lengthSq()<1e-8) return false;
   u.normalize();
-  /* GLB의 로컬 +y(손등)는 HAND3D_ORIENT 뒤 기저의 +z를 따른다.
-     기존 u×v는 손바닥을 보인 순간 카메라 쪽을 향해 모델 손등이 정면에 나타났다.
-     정확히 반대인 v×u를 모델 손등축에 배정해, 관찰자에게는 손바닥이 보이게 한다.
-     좌우 미러는 v에만 적용하고 여기서는 앞·뒤 축만 바로잡는다. */
-  const n=new THREE.Vector3().crossVectors(v,u);     // 모델 손등이 향할 법선 (손바닥 정면이면 카메라 반대)
+  /* u×v는 실제 손을 뒤집는 회전 방향까지 포함한 추적 법선이다. 여기서 v×u로 바꾸면
+     앞·뒤뿐 아니라 회전 방향 전체가 역전된다. 모델의 표면 교정은 HAND3D_ORIENT가 담당한다. */
+  const n=new THREE.Vector3().crossVectors(u,v);
   if (n.lengthSq()<1e-8) return false;
   n.normalize();
   u.sub(n.clone().multiplyScalar(u.dot(n))).normalize();   // u ⟂ n 직교화
@@ -3480,7 +3487,10 @@ function updateHandTrack(dt) {
       //   — 둘 다 주먹을 쥐어도 불변이라 "쥐면 멀어져 보이는" 오판이 없다.
       const palmLen=Math.hypot(snap.pts[9].x-snap.pts[0].x,snap.pts[9].y-snap.pts[0].y)
                     /Math.max(1,Math.min(innerWidth,innerHeight));
-      learnDepth(snap.depth, palmLen, snap.ts);
+      if (snap.debugDepth!=null) {
+        hand3dDepth.ratio=snap.debugDepth; hand3dDepth.zn=snap.debugDepth;
+        hand3dDepth.unit='debug'; hand3dDepth.qual=1; hand3dDepth.conf=1; hand3dDepth.lastTs=snap.ts;
+      } else learnDepth(snap.depth, palmLen, snap.ts);
       // 전체 지연 실측: 카메라 캡처(가능한 브라우저) 또는 추론 시작 → 이 프레임 반영까지
       const lag=now-snap.ts;
       e2eMs = e2eMs ? e2eMs+(lag-e2eMs)*.2 : lag;
@@ -4011,7 +4021,7 @@ window.__MUNG__ = {
     handRealtime:{ presence:Math.round(handPresence*100)/100, tracking:!!currentSimulationHand(),
       curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate,
       infPath, infHz, infMs, e2eMs:Math.round(e2eMs), e2eSrc,
-      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v12-palm-game-hud' },
+      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v12.1-depth-palm-rotation' },
     palmSync:{ phase:palmSync.phase, ratio:Math.round(palmSync.ratio*100)/100,
       matched:palmSync.matched, held:Math.round(palmSync.t*100)/100, need:PALMSYNC_SEC,
       done:palmSync.done, hint:palmSync.hint, samples:palmSync.sd.length,
