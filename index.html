@@ -2542,10 +2542,9 @@ function fingerCurls(pts) {
    ③ 고스트: 강아지 우선 원칙 — depth-prepass로 내부 겹침 없는 균일 반투명(기본 50%).
    로드 실패(오프라인 등) 시 기존 2D 일러스트 손으로 자동 폴백. */
 const HAND3D_FOV = 38;
-/* 추적 기저는 MediaPipe의 회전 방향을 그대로 유지한다. v12.1은 u×v로 기저를 바로잡으면서
-   GLB 고정축도 180° 돌려 두 교정이 상쇄됐다. 모델 고정축은 원래 방향을 유지하고,
-   손바닥/손등은 추적 기저에서 딱 한 번만 결정해야 실제 표면과 뒤집기 방향이 함께 맞는다. */
-const HAND3D_ORIENT = [Math.PI/2, 0, 0];
+/* 실제 전면 카메라 검증 기준: u×v 추적 기저에서 GLB 기본 표면은 손바닥/손등이 반대다.
+   좌우 위치와 회전 방향은 그대로 두고, 모델의 고정 손가락축만 180° 돌려 표면을 맞춘다. */
+const HAND3D_ORIENT = [-Math.PI/2, 0, 0];
 const HAND3D_BASE_TILT = (()=>{ const v=parseFloat(new URLSearchParams(location.search).get('handTilt'));
   return Number.isFinite(v) ? v : 2.05; })();    // 뷰 공간 기울기 보정 (실측 확정 · ?handTilt= 로 튜닝)
 const HAND3D_GRAB_FROM_OPEN = true;       // GrabHold가 펴짐→쥠 방향인지 여부
@@ -4022,7 +4021,7 @@ window.__MUNG__ = {
     handRealtime:{ presence:Math.round(handPresence*100)/100, tracking:!!currentSimulationHand(),
       curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate,
       infPath, infHz, infMs, e2eMs:Math.round(e2eMs), e2eSrc,
-      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v12.2-palm-surface-fix' },
+      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v12.3-real-camera-palm-fix' },
     palmSync:{ phase:palmSync.phase, ratio:Math.round(palmSync.ratio*100)/100,
       matched:palmSync.matched, held:Math.round(palmSync.t*100)/100, need:PALMSYNC_SEC,
       done:palmSync.done, hint:palmSync.hint, samples:palmSync.sd.length,
