@@ -567,6 +567,7 @@
     left:var(--sim-dog-x,50%); top:var(--sim-dog-y,57%); width:min(450px,35vw); z-index:6;
     filter:drop-shadow(0 22px 22px rgba(58,91,79,.13));
     transition:left .5s cubic-bezier(.2,.8,.2,1),top .5s cubic-bezier(.2,.8,.2,1),width .5s cubic-bezier(.2,.8,.2,1);
+    will-change:transform;
   }
   body.virtualMode #dogSpriteWrap::before {
     content:''; position:absolute; z-index:-1; left:20%; right:20%; bottom:8%; height:12%; border-radius:50%;
@@ -574,7 +575,11 @@
     filter:blur(7px); transform:perspective(500px) rotateX(67deg) scale(var(--dog-shadow-scale,1));
     opacity:var(--dog-shadow-opacity,.62); transition:transform .45s,opacity .45s;
   }
-  body.virtualMode #dogSprite { filter:drop-shadow(0 22px 15px rgba(42,78,66,.18)); }
+  body.virtualMode #dogSprite { filter:drop-shadow(0 22px 15px rgba(42,78,66,.18)); will-change:transform,filter; }
+  body.virtualMode #dogSpriteWrap.petReceiving #dogSprite {
+    filter:drop-shadow(0 18px 13px rgba(42,78,66,.16)) saturate(1.045) brightness(1.025);
+  }
+  body.virtualMode #dogSpriteWrap.handWatching #dogAura { opacity:.9; }
   body.virtualMode #dogAura {
     bottom:5%; background:radial-gradient(ellipse,rgba(101,205,181,.31),rgba(101,205,181,.06) 58%,transparent 74%);
     border-color:rgba(101,205,181,.52); animation:dogAuraPulse 2.4s ease-in-out infinite;
@@ -627,6 +632,11 @@
     #safeZone { top:78%; }
     #distanceTag { top:86%; }
     #simInstruction { bottom:10px; min-height:43px; font-size:12px; }
+  }
+  @media (prefers-reduced-motion:reduce) {
+    #dogAura,#petFurFx::after,body.virtualMode.dogPhaseUp #dogSpriteWrap,
+    #dogSpriteWrap.success,#dogSpriteWrap.error,#dogSpriteWrap.commanding { animation:none!important; }
+    #petFurFx,body.virtualMode #dogSpriteWrap { transition:none!important; }
   }
 </style>
 </head>
@@ -861,12 +871,17 @@ const BREEDS = {
 };
 let breedKey = 'chihuahua', trainLv = {}, stats = { cmd:0, ok:0, error:0 };
 const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || matchMedia('(pointer:coarse)').matches;
+const reduceMotion = matchMedia('(prefers-reduced-motion:reduce)').matches;
 const demoMode = new URLSearchParams(location.search).get('demo') === '1';
 const handDebugMode = new URLSearchParams(location.search).get('handDebug') === '1';
 const handDebugDepthParam = new URLSearchParams(location.search).get('debugDepth');
 const handDebugYawParam = new URLSearchParams(location.search).get('debugYaw');
+const handDebugXParam = new URLSearchParams(location.search).get('debugX');
+const handDebugYParam = new URLSearchParams(location.search).get('debugY');
 const handDebugDepth = handDebugDepthParam===null ? NaN : Number(handDebugDepthParam);
 const handDebugYaw = handDebugYawParam===null ? NaN : Number(handDebugYawParam);
+const handDebugX = handDebugXParam===null ? NaN : Number(handDebugXParam);
+const handDebugY = handDebugYParam===null ? NaN : Number(handDebugYParam);
 const requestedSimPhase = Number(new URLSearchParams(location.search).get('simPhase'));
 const freezeSimulation = new URLSearchParams(location.search).get('freezeSim') === '1';
 document.body.classList.toggle('demoMode', demoMode);
@@ -1288,31 +1303,70 @@ function renderDogMotion(track, progress, sequenceFrame) {
   aura.style.transform=`perspective(500px) rotateX(68deg) scale(${pulse.toFixed(3)})`;
   aura.style.opacity=String(Math.max(.58,Math.min(1,.92-Math.max(0,-m.y)*.008)));
 }
+/* 각 행은 같은 상태 안의 셀 애니메이션이다. 서로 위치가 다른 전신 셀을 알파로 겹치면
+   눈·귀·몸이 두 개로 보이므로, 스프라이트는 한 번에 정확히 한 셀만 그린다.
+   셀 사이의 연속감은 호흡·발걸음·시선·접촉 기댐 트랜스폼이 담당한다. */
+const SIM_DOG_TRACKS = [
+  { pose:'guarded',    cells:[0,1,0,2,0,3],       ms:820 },
+  { pose:'watching',   cells:[0,1,2,1,0],         ms:700 },
+  { pose:'softening',  cells:[4,5,6,7,6,5],       ms:620 },
+  { pose:'approach',   cells:[8,9,10,11,10,9],    ms:245 },
+  { pose:'trust',      cells:[12,13,14,15,14,13], ms:760 }
+];
+const SIM_DOG_PET_TRACK = { pose:'receiving-pet', cells:[12,13,14,15,14,13], ms:620 };
+let dogSimCell=-1, dogSimCellAt=0;
 function renderSimulationDog(now) {
-  const frame=Math.floor((now-dogAnimStartedAt)/(1000/MOTION_FPS));
-  const row=simExperience.warningUntil>now ? 0 : [0,0,1,2,3][simExperience.phase];
-  const cycle=[0,1,2,3,2,1];
-  const f=(now-dogAnimStartedAt)/520;
-  const step=Math.floor(f)%cycle.length, segment=f-Math.floor(f);
-  // 앞 55%는 현재 컷 유지, 뒤 45%에서 다음 컷으로 크로스페이드 (매 프레임 연속 렌더)
-  const blend=motionEase(clamp01((segment-.55)/.45));
-  const srcA=row*4+cycle[step], srcB=row*4+cycle[(step+1)%cycle.length];
-  const breathe=Math.sin(now/360)*.012;
-  const lean=simExperience.phase===0 || simExperience.phase===1 ? -1.2 : simExperience.phase===3 ? .7 : 0;
+  const phase=Math.max(0,Math.min(4,simExperience.phase));
+  const touchingHead=hand3dTouch.strength>.28&&hand3dTouch.part==='head';
+  const track=touchingHead&&phase>=3 ? SIM_DOG_PET_TRACK : SIM_DOG_TRACKS[phase];
+  const elapsed=Math.max(0,now-dogAnimStartedAt);
+  const frame=Math.floor(elapsed/(1000/MOTION_FPS));
+  const cellIndex=reduceMotion?0:Math.floor(elapsed/track.ms)%track.cells.length;
+  const src=track.cells[cellIndex];
+  if (src!==dogSimCell){ dogSimCell=src; dogSimCellAt=now; }
+
+  const wrap=$('dogSpriteWrap'), hand=currentSimulationHand();
+  const r=wrap.getBoundingClientRect();
+  const hx=r.left+r.width*.5, hy=r.top+r.height*.36, hr=Math.max(34,r.width*.235);
+  const gazeX=hand?Math.max(-1,Math.min(1,(hand.x-hx)/(hr*1.35))):0;
+  const gazeY=hand?Math.max(-1,Math.min(1,(hand.y-hy)/(hr*1.4))):0;
+  const attention=clamp01((phase+.35)/3.2+hand3dTouch.prox*.45);
+  const comfort=clamp01(hand3dTouch.headPet*.72+hand3dTouch.pet*.48);
+  const breath=reduceMotion?0:Math.sin(now/470)*(.006+comfort*.004);
+  const stepPhase=elapsed/track.ms*Math.PI*2;
+  const walking=track.pose==='approach'&&!touchingHead&&!reduceMotion;
+  const stepLift=walking?Math.abs(Math.sin(stepPhase))*4.2:0;
+  const stepRoll=walking?Math.sin(stepPhase)*.7:0;
+  const changedFor=now-dogSimCellAt;
+  const settle=reduceMotion?0:Math.sin(clamp01(changedFor/170)*Math.PI)*Math.exp(-changedFor/240);
+  const baseLean=phase<=1?-1.05:phase===3?.45:0;
+  const contactLean=touchingHead?gazeX*(1.25+comfort*1.6):0;
+  const x=gazeX*attention*2.4;
+  const y=gazeY*attention*1.15-stepLift-settle*(walking?2.4:1.1)-comfort*1.8;
+  const rot=baseLean+gazeX*attention*.72+stepRoll+contactLean;
+  const squash=walking?Math.sin(stepPhase)*.008:0;
+
   dogSpriteCtx.clearRect(0,0,dogSpriteCanvas.width,dogSpriteCanvas.height);
-  dogSpriteCtx.save(); dogSpriteCtx.translate(256,256+Math.sin(now/420)*2.4);
-  dogSpriteCtx.rotate((lean+Math.sin(now/700)*.35)*Math.PI/180);
-  dogSpriteCtx.scale(1+breathe,1-breathe*.45);
-  const visibleSource=blend<.5?srcA:srcB;
-  if (srcA===srcB || blend<=.004) drawDogSource(srcA,1);
-  else { drawDogSource(srcA,1); drawDogSource(srcB,blend); }
+  dogSpriteCtx.save();
+  dogSpriteCtx.translate(256+x,256+y);
+  dogSpriteCtx.rotate(rot*Math.PI/180);
+  dogSpriteCtx.scale(1+breath-squash+comfort*.006,1-breath*.48+squash*.55-comfort*.004);
+  drawDogSource(src,1);
   dogSpriteCtx.restore(); dogSpriteCtx.globalAlpha=1;
-  dogFrameIndex=frame; dogSourceFrame=visibleSource;
-  dogSpriteCanvas.dataset.pose=['guarded','guarded','softening','approach','trust'][simExperience.phase];
-  dogSpriteCanvas.dataset.frame=String(frame); dogSpriteCanvas.dataset.sourceFrame=String(dogSourceFrame);
+
+  dogFrameIndex=frame; dogSourceFrame=src;
+  dogSpriteCanvas.dataset.pose=track.pose;
+  dogSpriteCanvas.dataset.frame=String(frame); dogSpriteCanvas.dataset.sourceFrame=String(src);
   dogSpriteCanvas.dataset.motionFps=String(MOTION_FPS);
-  const pulse=1+Math.sin(now/430)*.016;
-  $('dogAura').style.transform=`perspective(500px) rotateX(68deg) scale(${pulse.toFixed(3)})`;
+  wrap.classList.toggle('petReceiving',touchingHead);
+  wrap.classList.toggle('handWatching',!!hand&&attention>.25);
+  const shadowLift=stepLift/4.2;
+  wrap.style.setProperty('--dog-shadow-scale',(1.02+phase*.025-comfort*.035-shadowLift*.06).toFixed(3));
+  wrap.style.setProperty('--dog-shadow-opacity',(.56+phase*.045+comfort*.1-shadowLift*.12).toFixed(3));
+  const pulse=1+(reduceMotion?0:Math.sin(now/530)*.012)+comfort*.025;
+  const aura=$('dogAura');
+  aura.style.transform=`perspective(500px) rotateX(68deg) scale(${pulse.toFixed(3)})`;
+  aura.style.opacity=(.58+attention*.18+comfort*.2).toFixed(3);
 }
 function tickDogSprite(now) {
   if (!dogSpriteReady) return;
@@ -2150,7 +2204,9 @@ function fireBurst() {
 // 합성 좌표만 사용하는 시각 회귀검증 모드. 실제 카메라·랜드마크는 저장하지 않는다.
 function tickHandDebug(t) {
   if (!handDebugMode) return;
-  const cx=innerWidth*(.58+Math.sin(t/900)*.05), cy=innerHeight*(.58+Math.cos(t/1100)*.035);
+  // debugX/debugY로 접촉 부위를 고정하면 움직이는 합성 손에 기대지 않고 머리·몸통 반응을 재현할 수 있다.
+  const cx=innerWidth*(Number.isFinite(handDebugX)?clamp01(handDebugX):.58+Math.sin(t/900)*.05);
+  const cy=innerHeight*(Number.isFinite(handDebugY)?clamp01(handDebugY):.58+Math.cos(t/1100)*.035);
   // 접근/후퇴 시뮬레이션: 손 크기를 주기적으로 키웠다 줄여 z깊이 파이프라인을 검증
   const depthWave=Number.isFinite(handDebugDepth) ? clamp01(handDebugDepth)*2-1 : Math.sin(t/1200);
   const s=Math.max(72,Math.min(innerWidth,innerHeight)*.16)*(1+depthWave*.45);
@@ -4115,7 +4171,7 @@ window.__MUNG__ = {
     handRealtime:{ presence:Math.round(handPresence*100)/100, tracking:!!currentSimulationHand(),
       curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate,
       infPath, infHz, infMs, e2eMs:Math.round(e2eMs), e2eSrc,
-      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v14-palm-physics' },
+      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v15-responsive-dog' },
     palmSync:{ phase:palmSync.phase, ratio:Math.round(palmSync.ratio*100)/100,
       matched:palmSync.matched, held:Math.round(palmSync.t*100)/100, need:PALMSYNC_SEC,
       done:palmSync.done, hint:palmSync.hint, samples:palmSync.sd.length,
