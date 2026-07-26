@@ -18,8 +18,8 @@ assert.doesNotMatch(
 // Palm/back correction belongs to the model's fixed finger axis.
 assert.match(
   html,
-  /const HAND3D_ORIENT = \[-Math\.PI\/2, 0, 0\]/,
-  'the GLB must be flipped around its fixed finger axis'
+  /const HAND3D_ORIENT = \[Math\.PI\/2, 0, 0\]/,
+  'the GLB surface correction must not cancel the tracked u×v basis'
 );
 
 const near = Number(html.match(/const HAND3D_SIZE_NEAR = ([.\d]+)/)?.[1]);
