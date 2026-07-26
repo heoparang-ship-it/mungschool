@@ -426,6 +426,11 @@
   }
   #hand3d { position:fixed; inset:0; width:100vw; height:100vh; z-index:13; pointer-events:none; }
   #virtualHand { position:fixed; inset:0; width:100vw; height:100vh; z-index:14; pointer-events:none; }
+  /* ★가림(occlusion) 베일: 강아지 스프라이트를 손 위에 다시 그려, 손이 강아지 '뒤로' 들어가
+     보이게 한다. 강아지(z 6)가 손(z 13)보다 아래라 깊이가 1.0에 닿아도 손이 늘 앞에 있었고,
+     그게 "더 깊이 안 들어간다"는 감각의 진짜 원인이었다. 접촉 지점만 부드럽게 뚫어 쓴다. */
+  #dogVeil { position:fixed; inset:0; width:100vw; height:100vh; z-index:15; pointer-events:none;
+             opacity:0; transition:opacity .12s linear; }
   #simBrand {
     position:fixed; z-index:18; left:28px; top:24px; display:flex; align-items:center; gap:10px;
     color:var(--sim-ink); font-size:18px; font-weight:1000; letter-spacing:-.6px; pointer-events:none;
@@ -564,6 +569,7 @@
 <div id="simPrivacy">카메라는 인식에만 사용 · 원본 저장 0</div>
 <canvas id="hand3d" aria-label="실시간 3D 손"></canvas>
 <canvas id="virtualHand" aria-label="실시간으로 인식된 1인칭 손"></canvas>
+<canvas id="dogVeil" aria-hidden="true"></canvas>
 <div id="interactionFlash"></div>
 <video id="cam" autoplay playsinline webkit-playsinline muted></video>
 <canvas id="fx"></canvas>
@@ -664,6 +670,7 @@
   <div class="row">
     <button id="openOperator">운영자 화면</button><button id="showResult">결과카드</button>
     <button id="resetSession">세션 초기화</button>
+    <button id="handSide" type="button" title="화면 속 손의 좌우를 바꿉니다 (H)">손 오른손</button>
   </div>
   <label>크기 <input type="range" id="rS" min="0.4" max="2.5" step="0.05" value="1"></label>
   <label>손 불투명도 <input type="range" id="rHandOp" min="0.15" max="1" step="0.05" value="0.5"></label>
@@ -763,6 +770,42 @@ document.body.classList.toggle('demoMode', demoMode);
 const $ = id => document.getElementById(id);
 const virtualHandCanvas = $('virtualHand');
 const virtualHandCtx = virtualHandCanvas.getContext('2d');
+/* ─── 가림(occlusion) 베일 ───
+   깊이의 가장 강한 시각 단서는 크기가 아니라 '가려짐'이다. 그런데 강아지 스프라이트(z-index 6)가
+   3D 손 캔버스(13)보다 아래에 있어서, 깊이 값이 1.0에 도달해도 손은 언제나 강아지 앞에 그려졌다.
+   그래서 "닿았다"까지는 보이지만 "안으로 들어갔다"가 절대 안 보였다 — 반복된 뎁스 불만의 진짜 원인.
+   해결: 손보다 위(z-index 15)에 강아지 스프라이트를 다시 그린 뒤, 접촉 지점 주변만 남기고
+   destination-in 으로 지운다. 결과적으로 손끝이 잠긴 만큼만 털에 덮인다.
+   ★불투명도·2.5D 그래픽 규칙 유지: 손 재질을 건드리지 않고, 강아지 원본 픽셀만 재사용한다. */
+const dogVeilCanvas = $('dogVeil');
+const dogVeilCtx = dogVeilCanvas.getContext('2d');
+let dogVeilAlpha = 0;                          // QA 노출용 (0 = 가림 없음)
+function drawDogVeil(){
+  if (!dogVeilCtx) return;
+  const T=hand3dTouch;
+  // 잠김(sink)이 생겨야 가려진다: 표면에 '닿은' 순간엔 손이 앞에, 밀어 넣을수록 털에 덮인다
+  const a=clamp01(T.strength)*clamp01(T.sink*1.15)*clamp01(handPresence*1.2);
+  if (a!==dogVeilAlpha){ dogVeilAlpha=a; dogVeilCanvas.style.opacity=a.toFixed(3); }
+  dogVeilCtx.setTransform(1,0,0,1,0,0);
+  dogVeilCtx.clearRect(0,0,dogVeilCanvas.width,dogVeilCanvas.height);
+  if (a<=.02 || !dogSpriteReady) return;
+  const dpr=Math.min(devicePixelRatio||1,2);
+  dogVeilCtx.setTransform(dpr,0,0,dpr,0,0);
+  const r=$('dogSpriteWrap').getBoundingClientRect();
+  dogVeilCtx.drawImage(dogSpriteCanvas, r.left, r.top, r.width, r.height);
+  // 접촉 지점 주변만 남긴다(= 그 부분만 강아지가 손을 덮는다). 표면 법선 안쪽으로 살짝 밀어
+  // 손이 '강아지 뒤로' 들어가는 방향감을 준다.
+  const hpx=Math.max(120,(hand3dSizeFrac||.3)*innerHeight);
+  const rad=Math.max(46,hpx*(.22+T.sink*.34));
+  const gx=T.cx-T.nx*rad*.35, gy=T.cy-T.ny*rad*.35;
+  const g=dogVeilCtx.createRadialGradient(gx,gy,rad*.15,gx,gy,rad);
+  g.addColorStop(0,'rgba(0,0,0,1)'); g.addColorStop(.62,'rgba(0,0,0,.82)');
+  g.addColorStop(1,'rgba(0,0,0,0)');
+  dogVeilCtx.globalCompositeOperation='destination-in';
+  dogVeilCtx.fillStyle=g;
+  dogVeilCtx.fillRect(gx-rad,gy-rad,rad*2,rad*2);
+  dogVeilCtx.globalCompositeOperation='source-over';
+}
 const virtualHandImg = new Image();
 virtualHandImg.src = 'assets/first-person-hand-v1.webp';
 let virtualHandReady = false;
@@ -1414,6 +1457,8 @@ function sizeAll() {
   const dpr=Math.min(devicePixelRatio||1,2);
   virtualHandCanvas.width=Math.round(innerWidth*dpr); virtualHandCanvas.height=Math.round(innerHeight*dpr);
   virtualHandCtx.setTransform(dpr,0,0,dpr,0,0);
+  dogVeilCanvas.width=Math.round(innerWidth*dpr); dogVeilCanvas.height=Math.round(innerHeight*dpr);
+  dogVeilCtx.setTransform(dpr,0,0,dpr,0,0);
   simHandDraw.x=innerWidth*.72; simHandDraw.y=innerHeight*.72;
   try { sizeHand3d(); } catch(e) {}   // hand3d 선언 전 최초 호출은 무시 (선언 직후 자체 사이징)
 }
@@ -2365,8 +2410,11 @@ const HAND3D_BASE_TILT = (()=>{ const v=parseFloat(new URLSearchParams(location.
 const HAND3D_GRAB_FROM_OPEN = true;       // GrabHold가 펴짐→쥠 방향인지 여부
 /* ★깊이→크기 (2026-07-25): 원근만으로는 사용 구간에서 크기 변화가 1.2배도 안 돼
    "강아지를 만진다"는 감각이 죽는다. 렌더 깊이에서 목표 화면 높이 비율을 직접 정한다. */
-const HAND3D_SIZE_NEAR = .76;             // 창문 바로 앞(손을 몸쪽으로 뺀 상태) = 화면 높이의 76%
-const HAND3D_SIZE_FAR  = .38;             // 강아지 코앞(가장 깊을 때) = 38% ≈ 강아지 머리 지름의 1.2배
+const HAND3D_SIZE_NEAR = .86;             // 창문 바로 앞(손을 몸쪽으로 뺀 상태) = 화면 높이의 86%
+const HAND3D_SIZE_FAR  = .175;            // 꼬리까지 뻗은 가장 깊은 지점 = 17.5% (≈4.9배 변화)
+/* ★v11.2 (2026-07-26): 3.1배로는 "장면 안으로 들어간다"는 느낌이 안 났다. 실제 사람 손과
+   치와와 몸통의 크기비(≈.65)를 기준으로 역산하면 가장 깊은 지점의 손은 화면 높이의 17~18%가
+   맞다(강아지 몸통 270px 대비 손 158px = .58). 근거리는 86%까지 키워 왕복 대비를 4.9배로 만든다. */
 const HAND3D_MODEL_H   = 1.35;            // 정규화된 모델 최대 치수 (아래 fixStep 1과 반드시 동일)
 let hand3dRenderer=null, hand3dScene=null, hand3dShadowScene=null, hand3dCam=null;
 let hand3dRoot=null, hand3dOrient=null, hand3dInner=null, hand3dReady=false, hand3dMats=[], hand3dPrepass=null;
@@ -2393,7 +2441,7 @@ const hand3dDepth = { ratio:.5, min:null, max:null, buf:[], bufN:0,
    고정되지 않았다. 이제 전진 거리 30cm를 항상 깊이 전체에 대응시키고, 사람마다 다른
    '휴식 위치'만 느리게 배운다. 손이 앞쪽(접촉 구간)에 있을 때는 기준을 갱신하지 않으므로
    쓰다듬는 중에 기준이 밀려나지 않는다. */
-const HAND3D_SPAN_M = .30;                 // 깊이 전체에 대응하는 실제 전진 거리(m)
+const HAND3D_SPAN_M = .155;                // 깊이 전체에 대응하는 실제 전진 거리(m) — v11.2: 30→22→19→15.5cm (감도↑)
 const HAND3D_REST_MIN = .26, HAND3D_REST_MAX = .95;   // 휴식(먼 끝) 기준의 허용 범위(m)
 const HAND3D_DEPTH_MIN_SPAN = .04;
 const HAND3D_ABS_MIN_SPAN = .12;          // 절대 깊이: 12cm 이상 왕복하면 개인 도달범위로 스트레치
@@ -2452,8 +2500,12 @@ function learnDepth(sig, palmLen, ts){
     if (!Number.isFinite(hand3dDepth.rest)) hand3dDepth.rest=d;
     else if (d > hand3dDepth.rest)                          // 뒤로 물러남 = 진짜 휴식 위치 발견 → 빨리 따라감
       hand3dDepth.rest += (d-hand3dDepth.rest)*(1-Math.exp(-dtb/.7));
-    else if (d > hand3dDepth.rest-HAND3D_SPAN_M*.4)         // 살짝 앞: 아주 느리게만 (접촉 구간은 완전 동결)
-      hand3dDepth.rest += (d-hand3dDepth.rest)*(1-Math.exp(-dtb/10));
+    /* ★v11 핵심 수정: 예전엔 "휴식보다 8.8cm 앞"까지를 휴식 후보로 보고 τ=10s로 따라갔다.
+       그래서 사용자가 앞으로 뻗는 동안 기준(먼 끝)이 같이 앞으로 밀려나 — 6초 뻗으면 6cm —
+       "끝까지 밀어도 더 깊이 안 들어간다"가 됐다. 이제 휴식 갱신은 기준에서 2.2cm 이내에서만,
+       그것도 τ=25s로, 그리고 강아지에 닿는 동안엔 완전히 동결한다. 같은 자리 = 같은 깊이. */
+    else if (d > hand3dDepth.rest-HAND3D_SPAN_M*.10 && hand3dTouch.strength<.02)
+      hand3dDepth.rest += (d-hand3dDepth.rest)*(1-Math.exp(-dtb/25));
     /* 3초 동기화를 마쳤으면 기준점이 그 아래로는 내려가지 못하게 바닥을 깐다.
        (내려가면 동기화한 자세에서 더 이상 닿지 않게 되고, 그게 바로 사람이
         '추적이 안 된다'고 느끼는 증상이다. 위로 자라는 건 그대로 허용.) */
@@ -2461,7 +2513,7 @@ function learnDepth(sig, palmLen, ts){
       hand3dDepth.rest=palmSync.restLo;
     const far=Math.max(HAND3D_REST_MIN, Math.min(HAND3D_REST_MAX, hand3dDepth.rest));
     // 카메라에 아주 붙어 앉은 사용자는 30cm를 못 뻗으므로 그때만 폭을 줄인다
-    const span=Math.max(.16, Math.min(HAND3D_SPAN_M, far-HAND3D_DIST_MIN));
+    const span=Math.max(.14, Math.min(HAND3D_SPAN_M, far-HAND3D_DIST_MIN));
     // ④ 고정 폭 매핑 — 같은 물리 위치는 항상 같은 장면 깊이가 된다(반복 가능)
     raw=-d; zn=clamp01((far-d)/span);
     hand3dDepth.min=-far; hand3dDepth.max=-(far-span);
@@ -2488,7 +2540,13 @@ function learnDepth(sig, palmLen, ts){
   const prevRatio=hand3dDepth.ratio;
   // 신뢰도 게이팅: 랜드마크가 흔들리는 프레임은 천천히만 반영하고, 무너진 프레임은 아예 동결한다.
   // (틀린 깊이를 보여주는 것보다 잠깐 멈추는 편이 "만지는 느낌"을 훨씬 덜 깨뜨린다)
-  const kD=hand3dDepth.unit==='abs' ? .14+.36*hand3dDepth.qual : .45;
+  /* ★v11 수정: 예전엔 이득이 '프레임당 상수'였다. 그러면 인식률이 떨어지는 기기(초당 1~5회)에서
+     같은 손 동작에도 깊이가 몇 초씩 뒤처져 — 실측으로 22cm를 끝까지 밀어도 깊이가 0.87에서 멈췄다 —
+     사람은 그걸 "뎁스가 안 들어간다"로 느낀다. 이제 실제 경과 시간 기준 시간상수(τ)로 바꿔서
+     초당 1회로 갱신되든 60회로 갱신되든 같은 시간 안에 같은 깊이에 도달한다. */
+  const dtc = hand3dDepth.lastTs ? Math.min(.6,Math.max(.008,(ts-hand3dDepth.lastTs)/1000)) : .033;
+  const tauD = hand3dDepth.unit==='abs' ? .10-.055*hand3dDepth.qual : .055;   // 신뢰도↑ = 더 빠르게
+  const kD = 1-Math.exp(-dtc/Math.max(.02,tauD));
   if (hand3dDepth.qual>.10 || hand3dDepth.unit!=='abs') hand3dDepth.ratio+=(zn-hand3dDepth.ratio)*kD;
   else hand3dDepth.frozen++;
   if (hand3dDepth.lastTs){
@@ -2513,7 +2571,33 @@ const flipHand   = h => h==='Left' ? 'Right' : (h==='Right' ? 'Left' : '');
 const trueHandOf = h => flipHand(h||'');                     // 실제 해부학적 손
 const dispHandOf = h => (mirrored ? (h||'') : flipHand(h||''));   // 화면 점군의 손
 const HAND3D_FLIP_FOR = 'Right';          // 이전 'Left'는 손등/손바닥이 뒤집혀 오른손이 왼손처럼 보였다
-let hand3dMirror = 0;                     // 렌더 모델 좌우 반전 (-1=반전(왼손) · 1=원본(오른손) · 0=미정)
+/* ★v11 (2026-07-26 실사용 확인): 위 유도는 라벨 규약만 맞았고 GLB 자체의 좌우가 반대였다.
+   반전 없이 렌더한 모델은 화면에서 '왼손'으로 보인다 → 오른손을 그리려면 반전해야 한다.
+   그래서 규칙을 라벨에서 직접 부호를 뽑지 않고 "모델의 손 ↔ 그리려는 손"의 일치 여부로 바꿨다.
+   ① 기본값은 항상 오른손 (미검출·부팅·시연 모드 포함)
+   ② 사용자가 언제든 강제 지정 가능 (운영 드로어의 '손 좌우' 버튼 · ?hand=right|left|auto · H 키)
+   — 카메라·조명·사람마다 라벨이 흔들려도 발표 중 손이 뒤집힌 채로 갇히지 않게 하는 탈출구다. */
+/* ★v11.1 (2026-07-26) — 이 값을 이제 '눈'이 아니라 '기하'로 확정했다.
+   두 번이나 좌우를 틀린 이유는 렌더된 손 사진만 보고 판단했기 때문이다(손등/손바닥이
+   구분되지 않는 각도라 사람 눈으로는 오른손-손등과 왼손-손바닥이 똑같이 보인다).
+   그래서 좌우를 각도와 무관한 불변량으로 직접 측정했다:
+     f = 손목→중지, s = 새끼MCP→검지MCP, t = 손목→엄지 일 때
+     오른손이면 어떤 오른손좌표계에서도 det[f,s,t] = f·(s×t) < 0.
+   GLB 뼈의 실제 렌더 월드좌표로 재니 반전 없는 원본이 det = -0.472 (= 오른손)였다.
+   즉 예전 값('Left')은 부호가 반대여서, 오른손을 그리라고 지시하면 반전이 걸려
+   화면에는 왼손이 나왔다 — 사용자가 본 그 증상이다. QA에 이 측정을 상시 검증으로 넣었다. */
+const HAND3D_MODEL_IS  = 'Right';         // 반전 없이 렌더한 GLB가 화면에서 보이는 손 (기하로 측정)
+const HAND3D_SIDE_DEF  = 'Right';         // 기본 손 = 오른손
+let handSideForce = (()=>{                // 'Right'|'Left'=강제 · null=자동(라벨 추종)
+  const q=(new URLSearchParams(location.search).get('hand')||'').toLowerCase();
+  if (q==='right') return 'Right';
+  if (q==='left')  return 'Left';
+  if (q==='auto')  return null;
+  try { const s=localStorage.getItem('mung-hand-side');
+        if (s==='Right'||s==='Left') return s; if (s==='auto') return null; } catch(e){}
+  return HAND3D_SIDE_DEF;                 // 저장값이 없으면 오른손 고정으로 시작
+})();
+let hand3dMirror = 0;                     // 렌더 모델 좌우 반전 (-1=반전 · 1=원본 · 0=미정)
 let hand3dSizeMul = 1, hand3dSizeFrac = 0;// 깊이→크기 배율 · 목표 화면높이 비율 (QA 노출용)
 let hand3dZn = .34, hand3dZnT = .34;      // 크기 전용 정규화 깊이 (접촉 클램프 전 원본) · 목표값
 const handChirVote = { h:'', n:0 };       // 라벨 흔들림 방지 히스테리시스
@@ -2526,34 +2610,76 @@ let hand3dContact=false, hand3dTouchFxAt=0;   // 강아지 접촉 상태 · 촉�
       그 값이 꼬리·기댐·표정·하트로 점진적으로 번지게 한다. */
 const hand3dTouch = { strength:0, prox:0, pet:0, strokes:0, dirX:0, revAt:0, lastX:0,
                       cx:0, cy:0, nx:0, ny:-1, sd:0, part:'', press:0,
+                      sink:0, tailAt:0, tailSeen:false,      // ★v11 잠김 깊이 · 꼬리 반응
+                      ax:0, ay:0,                            // 판정 조준점(화면 px)
                       tapAt:0, heartAt:0, purrAt:0 };
 let handTouchShadow=null;                     // 강아지 몸에 지는 손 그림자 (가장 강한 깊이 단서)
 /* 강아지 표면(화면 좌표): 스프라이트 사각형에서 머리 원 + 몸통 타원을 유도한다 */
+/* ★v11.2 꼬리 존 — 스프라이트 알파를 32×32로 실측해서 다시 잡았다(2026-07-26).
+   v11까지는 (0.25w, 0.65h)였는데, 실측 실루엣은 그 높이에서 u 0.30~0.61 구간만 불투명하다.
+   즉 꼬리 존이 강아지 '바깥 빈 바닥'에 있었다(알파 0). 그래서 손이 꼬리에 '닿았다'고
+   판정돼도 화면에는 허공을 만지는 손만 보였고, 덮을 강아지 픽셀이 없으니 가림도 일어날 수
+   없었다 — 이게 "꼬리까지 만지는 느낌이 안 난다"의 남은 절반이었다.
+   앞을 보고 앉은 치와와 스프라이트에는 꼬리가 아예 보이지 않으므로, 꼬리는 '몸통 뒤쪽
+   엉덩이'를 대리 지점으로 쓴다: 실루엣 안쪽 (0.375w, 0.74h). 여기라면 손이 강아지 픽셀
+   위에 놓이고, 깊이가 깊어질수록 털에 덮여 '뒤로 돌아 들어갔다'로 읽힌다. */
+const tailOf = b => ({ x:b.x-b.rx*.42, y:b.y+b.ry*.29, rx:b.rx*.25, ry:b.ry*.40 });
 function dogSurface(){
   if (dogSpriteReady){
     const r=$('dogSpriteWrap').getBoundingClientRect();
+    const body={ x:r.left+r.width*.5, y:r.top+r.height*.68, rx:Math.max(38,r.width*.30),
+                 ry:Math.max(28,r.height*.20) };
     return { head:{ x:r.left+r.width*.5, y:r.top+r.height*.36, r:Math.max(34,r.width*.235) },
-             body:{ x:r.left+r.width*.5, y:r.top+r.height*.68, rx:Math.max(38,r.width*.30),
-                    ry:Math.max(28,r.height*.20) } };
+             body, tail:tailOf(body) };
   }
   const p=dogScreenPos(), b=dogBase();
-  return { head:{ x:p.x, y:p.y, r:Math.max(34,b.r*.8) },
-           body:{ x:b.x, y:b.y-b.r*.5, rx:b.r, ry:b.r*.7 } };
+  const body={ x:b.x, y:b.y-b.r*.5, rx:b.r, ry:b.r*.7 };
+  return { head:{ x:p.x, y:p.y, r:Math.max(34,b.r*.8) }, body, tail:tailOf(body) };
 }
-/* 손 화면좌표 → 가장 가까운 표면점·법선·부호거리(음수=파고듦) */
+/* 타원 부호거리·법선·표면점 (몸통·꼬리 공용) */
+function ellipseHit(hx, hy, e, part){
+  const dx=(hx-e.x)/e.rx, dy=(hy-e.y)/e.ry;
+  const k=Math.hypot(dx,dy)||1e-4;
+  const nlen=Math.hypot(dx/e.rx, dy/e.ry)||1e-4;
+  return { part, sd:(k-1)*Math.min(e.rx,e.ry), r:Math.min(e.rx,e.ry),
+           nx:(dx/e.rx)/nlen, ny:(dy/e.ry)/nlen, sx:e.x+dx/k*e.rx, sy:e.y+dy/k*e.ry };
+}
+/* 손 화면좌표 → 가장 가까운 표면점·법선·부호거리(음수=파고듦). 머리·몸통·꼬리 중 최근접. */
 function dogSurfaceHit(hx, hy){
   const s=dogSurface();
   const hdx=hx-s.head.x, hdy=hy-s.head.y, hd=Math.hypot(hdx,hdy)||1e-4;
-  const hSd=hd-s.head.r;
-  const bdx=(hx-s.body.x)/s.body.rx, bdy=(hy-s.body.y)/s.body.ry;
-  const bk=Math.hypot(bdx,bdy)||1e-4;
-  const bSd=(bk-1)*Math.min(s.body.rx,s.body.ry);          // 타원 근사 부호거리
-  if (hSd<=bSd) return { part:'head', sd:hSd, r:s.head.r,
-                         nx:hdx/hd, ny:hdy/hd, sx:s.head.x+hdx/hd*s.head.r, sy:s.head.y+hdy/hd*s.head.r };
-  const nlen=Math.hypot(bdx/s.body.rx, bdy/s.body.ry)||1e-4;
-  return { part:'body', sd:bSd, r:Math.min(s.body.rx,s.body.ry),
-           nx:(bdx/s.body.rx)/nlen, ny:(bdy/s.body.ry)/nlen,
-           sx:s.body.x+bdx/bk*s.body.rx, sy:s.body.y+bdy/bk*s.body.ry };
+  const cands=[{ part:'head', sd:hd-s.head.r, r:s.head.r, nx:hdx/hd, ny:hdy/hd,
+                 sx:s.head.x+hdx/hd*s.head.r, sy:s.head.y+hdy/hd*s.head.r },
+               ellipseHit(hx,hy,s.body,'body'), ellipseHit(hx,hy,s.tail,'tail')];
+  /* ★v11.2 꼬리 우선. 꼬리 존을 몸통 타원 '안'으로 옮겼으므로(위 주석 참조) 최근접 규칙만
+     쓰면 몸통이 언제나 이긴다 — 몸통이 훨씬 크니 안쪽에서 부호거리가 더 깊게 음수다.
+     작고 의도적인 부위가 큰 부위를 이겨야 사람의 조준이 살아난다: 꼬리 타원의 1.4배 안이면
+     무조건 꼬리로 판정한다(관문 자체가 .70으로 높아서 깊이 없이는 닿지 않는다). */
+  const tl=cands[2];
+  if (tl.sd < tl.r*.4) return tl;
+  let best=cands[0];
+  for (const c of cands) if (c.sd<best.sd) best=c;
+  return best;
+}
+/* ★v11 리치 경로 — 의도 우선.
+   처음엔 깊이만으로 조준점을 머리 → 몸통 → 꼬리로 끌었다. 그런데 그러면 사용자가 꼬리를
+   똑바로 조준하고 앞으로 밀어도, 중간 깊이에서 마그넷이 조준점을 몸통 쪽으로 끌어가
+   '꼬리'가 아니라 '몸통'으로 판정되고 그대로 붙어버렸다(실측). 사람의 조준이 항상 이긴다:
+   이미 강아지의 어떤 부위 근처를 조준하고 있으면 그 부위 중심으로만 당긴다.
+   조준이 강아지에서 멀 때만 깊이로 유도 경로(머리→몸통→꼬리)를 쓴다. */
+function dogReachAim(zn, hx, hy){
+  const s=dogSurface();
+  const near=(hx!=null&&hy!=null) ? dogSurfaceHit(hx,hy) : null;
+  if (near && near.sd <= near.r*1.2){                    // 이미 그 부위를 조준 중 → 의도 유지
+    const c = near.part==='tail' ? s.tail : near.part==='body' ? s.body : s.head;
+    return { x:c.x, y:c.y };
+  }
+  const p=dogScreenPos();
+  const t=clamp01((zn-.5)/.5);
+  if (t<=.56){ const k=t/.56;
+    return { x:p.x+(s.body.x-p.x)*k, y:p.y+(s.body.y-p.y)*k }; }
+  const k=(t-.56)/.44;
+  return { x:s.body.x+(s.tail.x-s.body.x)*k, y:s.body.y+(s.tail.y-s.body.y)*k };
 }
 /* ─── 3초 손바닥 동기화 (허파랑 제안, 2026-07-25) ───
    깊이 계산 자체는 선형 PnP로 정확해졌지만, "내 손이 지금 강아지에게 얼마나 가까운지"의
@@ -2576,7 +2702,15 @@ function dogSurfaceHit(hx, hy){
    그 거리에 못 미치는 자리에 앉은 사람(노트북에 아주 붙어 앉은 경우)을 위해 7초가 지나도
    한 번도 못 맞췄으면 목표 거리를 그 사람이 실제로 낸 거리로 조용히 옮긴다.
    실패해도 16초 뒤 조용히 넘어가고 기존 자동 학습으로 돌아간다(시연이 멈추면 안 되므로). */
-const PALMSYNC_SEC = 3.0, PALMSYNC_TOL = .12, PALMSYNC_ZN = .82, PALMSYNC_TIMEOUT = 16000;
+/* ★v11 결정적 수정 — PALMSYNC_ZN .82 → .58.
+   동기화한 자세를 곧바로 "거의 다 들어간 깊이(.82)"로 못 박아 놨더니, 그 자세에서 앞으로
+   밀 수 있는 여유가 전체 폭의 18%(≈3.4cm)밖에 남지 않았다. 그래서 사용자가 팔을 20cm 밀어도
+   처음 3cm에서 이미 최대 깊이에 닿고 나머지는 아무 변화가 없었다 — 이것이 "몇 번을 말해,
+   뎁스가 더 안 들어간다"의 진짜 원인이다.
+   이제 동기화 자세 = .58: 머리·몸통 접촉 문턱(.56) 바로 위라 동기화 직후 곧바로 만져지는
+   보람은 그대로 유지하면서, 거기서 3cm 더 밀면 꼬리(.74)에 닿고 8cm까지 계속 더 깊이
+   파고든다(잠김·크기 변화가 끝까지 살아 있다). */
+const PALMSYNC_SEC = 3.0, PALMSYNC_TOL = .12, PALMSYNC_ZN = .58, PALMSYNC_TIMEOUT = 16000;
 const PALMSYNC_DIST_M = .42;          // 앉아서 편하게 뻗는 거리 (성인 기준 중간값)
 const PALMSYNC_ADAPT_MS = 7000;       // 이 시간까지 한 번도 못 맞추면 목표 거리를 사람에게 맞춘다
 const palmSync = { phase:'idle', t:0, ratio:0, matched:false, hint:'', startAt:0, lastAt:0, doneAt:0,
@@ -2595,13 +2729,14 @@ function palmSyncFinish(ok){
     detRate:palmSync.tot?+(palmSync.det/palmSync.tot).toFixed(2):0 }; return; }
   const calM=medianOf(palmSync.sd.slice());
   palmSync.calM=calM; palmSync.done=true;
-  // 이 자세가 zn=0.82 (닿는 문턱 바로 안쪽) → 기준점을 역산해 못 박는다
+  // 이 자세가 zn=0.58 (닿는 문턱 바로 안쪽) → 기준점을 역산해 못 박는다
   hand3dDepth.rest=calM+PALMSYNC_ZN*HAND3D_SPAN_M;
   /* 이후 자동 학습에는 '바닥'만 깔아 준다(위쪽은 열어 둔다).
      아래로 내려가는 것 = 사람이 가르쳐 준 닿는 지점을 잃는 것이므로 막는다. 바닥값은
-     접촉 진입 문턱(zn .71) 바로 위로 잡아, 동기화한 그 자세면 언제든 닿는 것을 보장한다.
+     접촉 진입 문턱(zn .56) 바로 위로 잡아, 동기화한 그 자세면 언제든 닿는 것을 보장한다.
+     (동기화 깊이 .58보다 살짝 아래인 .57에 두어, 정상적인 휴식 학습을 막지 않는다.)
      위로 자라는 것 = 사람이 정말로 뒤로 물러앉은 것이므로 기존 학습에 맡긴다. */
-  palmSync.restLo=calM+.72*HAND3D_SPAN_M; palmSync.restHi=HAND3D_REST_MAX;
+  palmSync.restLo=calM+.57*HAND3D_SPAN_M; palmSync.restHi=HAND3D_REST_MAX;
   palmSync.report={ ok:true, calM:Math.round(calM*1000)/1000, n:palmSync.sd.length,
                     detRate:palmSync.tot?+(palmSync.det/palmSync.tot).toFixed(2):0,
                     palmM:Math.round(HAND_METRIC.seg['0-9']*1000)/1000,
@@ -2723,22 +2858,62 @@ function handOrientTarget(qOut){
   qOut.setFromRotationMatrix(_hq.m);
   return true;
 }
-/* ★실제 손이 왼손이면 모델(the-hand.glb = 오른손)을 좌우 반전한다.
+/* ★the-hand.glb는 반전 없이 렌더하면 '오른손'이다 — 눈으로 본 게 아니라 뼈 월드좌표로 측정했다.
+   불변량: f=손목→중지끝, s=새끼MCP→검지MCP, t=손목→엄지끝 일 때 오른손이면 f·(s×t) < 0.
+   실측값 det = -0.472 → 오른손. (v10·v11에서 두 번 틀린 이유: 렌더를 눈으로 판정했는데
+   '왼손의 손등'과 '오른손의 손바닥'은 실루엣이 완전히 같아서 육안 판정이 원리적으로 불가능하다.
+   앞으로 좌우 판정은 반드시 이 det 측정으로만 한다 — dbg_chir.cjs / QA A2·B1 참조.)
    inner.scale.z 는 GLB 로컬 좌우축(검지 -z · 새끼 +z)이라 부호만 뒤집으면
    손가락축(+x)·손등축(+y)은 그대로 두고 엄지 쪽만 반대로 간다.
    three r160은 matrixWorld.determinant()<0 이면 앞면 와인딩을 뒤집으므로
    FrontSide + 깊이 선행 패스 조합에서도 안전하고, 법선 역전치 행렬이 조명도 맞춰준다. */
-function applyHandChirality(label){
-  if (!hand3dInner) return;
-  const t=trueHandOf(label);
-  if (t){ if (handChirVote.h===t) handChirVote.n++; else { handChirVote.h=t; handChirVote.n=1; } }
-  if (handChirVote.n<8) return;                      // 8프레임 연속 같은 라벨만 신뢰 (깜빡임 방지)
-  const want=handChirVote.h==='Left' ? -1 : 1;
-  if (want===hand3dMirror) return;
+/* 모델을 '그리려는 손'으로 맞춘다 — 모델 원본이 오른손이므로 왼손이면 반전한다 */
+function setHandSideRender(side){
+  if (!hand3dInner) return false;
+  const want = (side===HAND3D_MODEL_IS) ? 1 : -1;
+  if (want===hand3dMirror) return false;
   hand3dMirror=want;
   hand3dInner.scale.z=Math.abs(hand3dInner.scale.z)*want;
   if (hand3dFixStep!==1) hand3dFixStep=2;            // 반전 후 중심 재보정
+  return true;
 }
+function handSideNow(){                              // 지금 그려야 하는 손
+  if (handSideForce) return handSideForce;           // 강제 지정이 최우선
+  return handChirVote.n>=8 && handChirVote.h ? handChirVote.h : HAND3D_SIDE_DEF;
+}
+function applyHandChirality(label){
+  if (!hand3dInner) return;
+  if (!handSideForce){                               // 자동 모드에서만 라벨을 투표에 넣는다
+    const t=trueHandOf(label);
+    if (t){ if (handChirVote.h===t) handChirVote.n++; else { handChirVote.h=t; handChirVote.n=1; } }
+  }
+  setHandSideRender(handSideNow());
+}
+/* 사용자 토글: 오른손 → 왼손 → 자동 순환. 발표 중에도 한 번 눌러 바로잡을 수 있다. */
+function handSideLabel(){
+  const b=$('handSide'); if (!b) return;
+  b.textContent='손 '+(handSideForce==='Right'?'오른손':handSideForce==='Left'?'왼손':'자동');
+}
+function cycleHandSide(){
+  handSideForce = handSideForce==='Right' ? 'Left' : (handSideForce==='Left' ? null : 'Right');
+  try { localStorage.setItem('mung-hand-side', handSideForce||'auto'); } catch(e){}
+  setHandSideRender(handSideNow());
+  handSideLabel();
+  toast(handSideForce==='Right' ? '오른손으로 고정' : handSideForce==='Left' ? '왼손으로 고정'
+                                : '손 좌우 자동 인식');
+}
+/* 손 좌우 토글 배선 — 버튼과 H 키. 라벨 인식이 흔들려도 사용자가 즉시 바로잡을 수 있게 한다.
+   (선언부보다 뒤에 두어야 한다: 위쪽 UI 배선 구역에서는 handSideForce가 아직 TDZ다) */
+(()=>{ const b=$('handSide'); if (!b) return;
+  handSideLabel();
+  b.addEventListener('click', cycleHandSide);
+})();
+addEventListener('keydown', e=>{
+  if (e.key==='h' || e.key==='H'){
+    const t=e.target; if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName||'')) return;
+    cycleHandSide();
+  }
+});
 /* 손 모델 축 하나를 월드(뷰) 방향으로 — QA에서 손등 방향·엄지 쪽을 수치로 검증한다 */
 const _axE=new THREE.Euler(HAND3D_ORIENT[0],HAND3D_ORIENT[1],HAND3D_ORIENT[2]);
 function handAxisWorld(x,y,z){
@@ -2826,6 +3001,7 @@ if (hand3dRenderer) new GLTFLoader().load('assets/the-hand.glb', gltf => {
     src.position.copy(center).negate();
     inner.scale.setScalar(s);
     hand3dInner=inner; hand3dFixStep=1;
+    setHandSideRender(handSideNow());     // ★부팅부터 오른손 (시연·휴식 자세까지 동일)
     hand3dOrient=new THREE.Group(); hand3dOrient.add(inner);
     hand3dOrient.rotation.set(HAND3D_ORIENT[0],HAND3D_ORIENT[1],HAND3D_ORIENT[2]);
     hand3dRoot=new THREE.Group(); hand3dRoot.add(hand3dOrient);
@@ -2908,6 +3084,7 @@ function tickTouchFeel(dt, live){
   if (!live){                                  // 추적이 끊기면 접촉·근접은 즉시 풀린다
     T.strength+=(0-T.strength)*(1-Math.exp(-dt*7));
     T.prox+=(0-T.prox)*(1-Math.exp(-dt*7));
+    T.sink+=(0-T.sink)*(1-Math.exp(-dt*7));
     hand3dContact=T.strength>.45;
   }
   if (T.strength>.45){
@@ -2920,7 +3097,8 @@ function tickTouchFeel(dt, live){
     }
     const lat=Math.min(700,simHandDraw.speed);
     T.pet=clamp01(T.pet+dt*(lat/430)*(T.strokes>=2?1:.3)*T.strength);
-    T.press+=(clamp01(lat/500)-T.press)*(1-Math.exp(-dt*5));
+    // ★v11 누름 강도는 손의 속도뿐 아니라 '얼마나 깊이 잠겼는지'도 반영한다
+    T.press+=(clamp01(Math.max(lat/500, T.sink*.9))-T.press)*(1-Math.exp(-dt*5));
   } else {
     T.pet=Math.max(0,T.pet-dt*.20);
     T.press+=(0-T.press)*(1-Math.exp(-dt*3));
@@ -2964,6 +3142,15 @@ function tickTouchFeel(dt, live){
     T.tapAt=now; touchSfx('brush',pet);
   }
   if (isOn && pet>.6 && now-T.purrAt>1800){ T.purrAt=now; touchSfx('purr',pet); haptic([8,70,8]); }
+  /* ★v11 꼬리 반응: 가장 깊은 지점에 닿았다는 걸 확실히 알려준다 — 꼬리가 세게 살랑거리고,
+     처음 닿았을 때 한 번만 안내 토스트를 띄운다 (뎁스가 끝까지 들어갔다는 증거). */
+  if (isOn && T.part==='tail'){
+    wagPower=Math.max(wagPower,.85+pet*.15);
+    if (now-T.tailAt>2600){
+      T.tailAt=now; emit('heart',T.cx,T.cy-22,3); touchSfx('purr',Math.max(.5,pet));
+      if (!T.tailSeen){ T.tailSeen=true; toast('꼬리까지 닿았어요 — 꼬리가 살랑살랑'); }
+    }
+  }
 }
 function tickHand3D(dt){
   const hand=currentSimulationHand();
@@ -2982,34 +3169,46 @@ function tickHand3D(dt){
       // 지연 보상: 인식 프레임 이후 흐른 시간만큼 깊이 속도로 앞질러 예측 (최대 110ms)
       const dAge=hand3dDepth.lastTs ? Math.min(.11,(performance.now()-hand3dDepth.lastTs)/1000) : 0;
       const ratioPred=clamp01(hand3dDepth.ratio+(hand3dDepth.vel||0)*dAge*.6);
-      const znRaw=clamp01(.5+(ratioPred-.5)*1.45);              // 0=몸쪽 1=화면 앞 (중앙 증폭)
-      // 비선형 커브: 멀리선 빠르게 이동, 강아지 근처에선 미세 제어 (만지기 직전 정밀 뎁스)
-      const zn=1-Math.pow(1-znRaw,1.7);
-      targetZ=3.9-zn*3.55;                                     // 월드 z 3.9(창문 앞)→0.35(강아지 코앞)
+      /* ★v11: 중심 증폭(±1.7 클리핑)을 버렸다. 그 방식은 양 끝 각 4.5cm를 죽은 구간으로 만들어
+         "끝까지 밀어도 더 안 들어간다"는 바로 그 증상을 만들었다. 이제 물리 비율을 그대로 쓴다:
+         휴식 위치 → 22cm 전진이 장면 깊이 전체(창문 앞 → 꼬리 뒤)에 1:1 대응하고, 죽은 구간이 없다. */
+      const znRaw=clamp01(ratioPred);
+      // 비선형 커브: 멀리선 빠르게 들어가고, 강아지 근처에선 미세 제어 (만지기 직전 정밀 뎁스)
+      const zn=1-Math.pow(1-znRaw,1.35);
+      targetZ=3.9-zn*3.72;                                     // ★v11 월드 z 3.9(창문 앞)→0.18(꼬리 뒤)
       hand3dZnT=znRaw;   // ★크기는 접촉 클램프 전 원본 깊이로 (닿는 동안 크기가 굳으면 감각이 죽는다)
-      // 리치 마그넷: 깊이 들어갈수록 화면 위치도 강아지 쪽으로 수렴
-      const dp=dogScreenPos();
-      const magnet=clamp01((znRaw-.5)/.5)*.4;
+      // ★v11 리치 마그넷: 조준점이 깊이에 따라 머리 → 몸통 → 꼬리로 이동한다
+      const dp=dogReachAim(znRaw, nx*innerWidth, ny*innerHeight);
+      const magnet=clamp01((znRaw-.44)/.56)*.58;   // v11.2: 더 일찍·더 강하게 강아지로 끌린다
       nx+=(dp.x/innerWidth-nx)*magnet;
       ny+=(dp.y/innerHeight-ny)*magnet;
       // ★접촉: 강아지 곡면(머리·몸통)에 닿으면 표면을 따라 미끄러지며 멈춘다 (통과 방지)
       const hx=nx*innerWidth, hy=ny*innerHeight;
       const hit=dogSurfaceHit(hx,hy);
       const T=hand3dTouch;
+      T.ax=hx; T.ay=hy;                    // 실제 판정에 쓰인 조준점 (QA 닫힌루프 보정용)
       T.part=hit.part; T.sd=hit.sd; T.nx=hit.nx; T.ny=hit.ny; T.cx=hit.sx; T.cy=hit.sy;
       // 근접도 = 깊이로 다가온 정도 × 강아지를 조준한 정도 → 그림자·근접링의 강도
-      T.prox=clamp01((znRaw-.46)/.30)*clamp01(1-hit.sd/Math.max(40,hit.r*1.5));
+      T.prox=clamp01((znRaw-.40)/.28)*clamp01(1-hit.sd/Math.max(40,hit.r*1.5));
       // 히스테리시스: 붙을 땐 좁게, 떨어질 땐 넓게 판정해 경계에서 깜빡이지 않게 한다
       const on=T.strength>.45;
-      const want = hit.sd < hit.r*(on?.44:.10) && znRaw > (on?.62:.71);
+      // ★v11 부위별 깊이 관문: 꼬리는 강아지의 가장 뒤쪽이므로 더 깊이 들어가야 닿는다
+      // (물리 비율 기준: 꼬리 = 휴식에서 16cm 이상 뻗어야 닿는 '가장 뒤쪽')
+      // v11.2: 전진 거리 자체가 15.5cm로 줄었으므로 관문도 같은 비율로 낮춘다(꼬리 .74→.70)
+      const needZ = hit.part==='tail' ? (on?.62:.70) : (on?.42:.50);
+      const want = hit.sd < hit.r*(on?.44:.10) && znRaw > needZ;
       T.strength+=((want?1:0)-T.strength)*(1-Math.exp(-Math.max(.001,dt)*(want?15:6)));
       hand3dContact = T.strength>.45;
+      // ★v11 가라앉는 바닥: 닿은 뒤에도 더 밀면 손이 털 속으로 잠긴다 (z가 굳지 않는다)
+      T.sink += (clamp01((znRaw-needZ)/Math.max(.06,1-needZ)) - T.sink)
+                *(1-Math.exp(-Math.max(.001,dt)*8));
       if (T.strength>.02){
         // 윤곽 슬라이딩: 파고든 만큼 표면 법선으로 되밀어 강아지 안으로 들어가지 않게 한다
         const push=Math.max(0,-hit.sd)*T.strength;
         nx=(hx+hit.nx*push)/innerWidth; ny=(hy+hit.ny*push)/innerHeight;
-        // 표면 정지 + 털에 눌리는 미세한 결
-        targetZ=targetZ+(Math.max(targetZ,1.02)-targetZ)*T.strength
+        // 표면 정지 + 털에 눌리는 미세한 결 — 바닥 자체가 sink만큼 더 내려간다
+        const floorZ = .92 - T.sink*.62;           // v11.2: 털 속으로 더 깊이 잠긴다
+        targetZ=targetZ+(Math.max(targetZ,floorZ)-targetZ)*T.strength
                 +Math.sin(restBob*6.2)*.03*T.strength;
       }
     } else {
@@ -3025,7 +3224,9 @@ function tickHand3D(dt){
   const kZ=1-Math.exp(-Math.max(.001,dt)*9);     // z 반응 가속 (감도↑)
   hand3dPose.z+=(targetZ-hand3dPose.z)*kZ;
   // 실추적이 아닌 분기(시연·홀드·휴식)는 목표 z에서 정규화 깊이를 역산해 같은 크기 규칙을 태운다
-  if (!(tracking && hand.actual)) hand3dZnT=1-Math.pow(clamp01((targetZ-.35)/3.55), 1/1.7);
+  // 비추적 분기(휴식·홀드·시연)에서도 크기가 z와 어긋나지 않게 위 매핑을 정확히 역산한다
+  if (!(tracking && hand.actual))
+    hand3dZnT=1-Math.pow(clamp01(1-(3.9-targetZ)/3.72), 1/1.35);
   hand3dZn+=(hand3dZnT-hand3dZn)*kZ;
   const w=hand3dWorldFromScreen(nx,ny,hand3dPose.z);
   hand3dPose.x+=(w.x-hand3dPose.x)*kPos;
@@ -3060,16 +3261,22 @@ function tickHand3D(dt){
     /* ★깊이→크기: 정규화 깊이(hand3dZn)로 화면 높이 대비 목표 크기를 직접 정하고, 원근이 이미
        주는 크기(natural)로 나눠 배율을 낸다. 렌더 z가 아니라 접촉 클램프 전 원본 깊이를 쓰므로
        강아지에 닿아 z가 멈춘 뒤에도 크기가 굳지 않는다. 창문 모델(깊이 들어갈수록 = 강아지에
-       가까울수록 작아진다)은 그대로. smoothstep으로 실제 사용 구간에 변화를 몰아준다 (≈2.0배). */
-    const qs=clamp01((hand3dZn-.08)/.84);
-    const frac=HAND3D_SIZE_NEAR+(HAND3D_SIZE_FAR-HAND3D_SIZE_NEAR)*(qs*qs*(3-2*qs));
+       가까울수록 작아진다)은 그대로.
+       ★v11 수정 — '끝에서 아무 일도 안 일어나는' 문제:
+       예전엔 ① 깊이 0.92부터는 크기 계산이 포화(deadband 0.08+0.84)돼 더 밀어도 변화가 없었고,
+       ② smoothstep이 양쪽 끝에서 기울기 0이라 마지막 10% 구간의 크기 변화가 4.6%에 불과했다.
+       실제로 손을 끝까지 밀면 "더는 안 들어간다"고 느껴진 결정적 이유다.
+       이제 ① 0.06~1.0 전 구간을 쓰고 ② 끝에서 기울기가 살아있는 ease-in 곡선(qs²(2-qs))으로
+       바꿔 같은 마지막 10%에서 16% 줄어든다 — 꼬리에 다가갈수록 오히려 변화가 또렷해진다. */
+    const qs=clamp01((hand3dZn-.06)/.94);
+    const frac=HAND3D_SIZE_NEAR+(HAND3D_SIZE_FAR-HAND3D_SIZE_NEAR)*(qs*qs*(2-qs));
     const dCam=Math.max(.35,hand3dCam.position.z-hand3dPose.z);
     const natural=HAND3D_MODEL_H/(2*Math.tan(HAND3D_FOV*Math.PI/360)*dCam);   // 원근만의 화면높이 비율
     const mul=Math.max(.35,Math.min(2.2,frac/natural));
     hand3dSizeFrac=frac; hand3dSizeMul=mul;
     hand3dRoot.scale.set((1+e*.55)*mul, (1+e*.55)*mul, (1-e)*mul);
     // 보조 깊이 단서: 깊이 들어갈수록 살짝 어두워진다 (불투명도는 '강아지 우선' 규칙대로 건드리지 않음)
-    const sh=.88+.12*clamp01((frac-HAND3D_SIZE_FAR)/Math.max(1e-3,HAND3D_SIZE_NEAR-HAND3D_SIZE_FAR));
+    const sh=.78+.22*clamp01((frac-HAND3D_SIZE_FAR)/Math.max(1e-3,HAND3D_SIZE_NEAR-HAND3D_SIZE_FAR));
     for (const m of hand3dMats){ m.opacity=hand3dOpacity*handPresence; m.color.setRGB(sh,.8902*sh,.8157*sh); }
   }
   if (handShadow){
@@ -3085,6 +3292,7 @@ function tickHand3D(dt){
   simHandDraw.x=sx; simHandDraw.y=sy;
   simHandDraw.size=Math.max(210,Math.min(620,(handTrack.extent||260)*2.15));
   tickTouchFeel(dt, tracking && !!hand.actual);
+  try { drawDogVeil(); } catch(e){}
   hand3dRenderer.clear(true,true,true);
   hand3dRenderer.render(hand3dShadowScene,hand3dCam);
   hand3dScene.overrideMaterial=hand3dPrepass;      // 깊이 선행 패스 → 내부 겹침 제거
@@ -3117,7 +3325,7 @@ function tickHand3D(dt){
 }
 function updateHandTrack(dt) {
   const now=performance.now();
-  const snap=handSnap && now-handSnap.ts<650 ? handSnap : null;
+  const snap=handSnap && now-handSnap.ts<handSnapMaxAge() ? handSnap : null;  // ★인식 간격에 맞춘 유효시간
   palmSyncTick(dt, now, snap);            // 3초 손바닥 동기화 (진행 중일 때만 동작)
   if (snap) {
     const c=handCenter();
@@ -3168,9 +3376,19 @@ function updateHandTrack(dt) {
     }
   }
 }
+/* ★v11 수정 — 인식이 느린 기기에서 손이 '있는데 없는' 상태가 되던 버그.
+   예전엔 마지막 인식이 650ms보다 오래됐으면 손이 없는 것으로 취급했다. 그런데 실측 환경에서
+   추론이 초당 1~2회까지 떨어지면(infHz=1) 프레임 간격 자체가 1000ms라, 손을 계속 들고 있어도
+   대부분의 시간이 '없음'으로 판정됐다 → 깊이·접촉이 그 자리에서 얼어붙고(zn 0.5에서 멈춤)
+   더 밀어도 아무 반응이 없다. 사람은 이걸 "추적이 안 된다 · 뎁스가 안 들어간다"로 느낀다.
+   이제 유효 시간을 실측 추론 간격에 맞춰 늘린다(간격의 2.6배 · 0.65~1.6초). */
+function handSnapMaxAge(){
+  const period = infHz>0 ? 1000/infHz : 0;
+  return Math.max(650, Math.min(1600, period*2.6));
+}
 function currentSimulationHand() {
   const now=performance.now();
-  if (handSnap && now-handSnap.ts<650) {
+  if (handSnap && now-handSnap.ts<handSnapMaxAge()) {
     const x=handTrack.x||innerWidth*.5, y=handTrack.y||innerHeight*.58;
     const extent=handTrack.extent||220;
     return { x, y, size:Math.max(210,Math.min(620,extent*2.15)),
@@ -3646,12 +3864,18 @@ window.__MUNG__ = {
       zn:Math.round(hand3dZn*1000)/1000, chirVote:handChirVote.h+':'+handChirVote.n,
       screen:handScreenSpan(),                                   // 실제 렌더 크기(화면 비율) — QA 검증용
       contact:hand3dContact, contactStrength:Math.round(hand3dTouch.strength*100)/100,
+      part:hand3dTouch.part, sink:Math.round(hand3dTouch.sink*1000)/1000,
+      veil:Math.round(dogVeilAlpha*1000)/1000,               // ★v11.2 가림 강도(0=손이 늘 앞)
+      // 접촉 판정에 쓰인 조준점 — QA가 조준을 닫힌 루프로 보정할 수 있게 노출 (개인정보 아님)
+      hx:Math.round(hand3dTouch.ax||0), hy:Math.round(hand3dTouch.ay||0),
+      sd:Math.round(hand3dTouch.sd||0),
+      side:handSideNow(), force:handSideForce||'auto',        // ★v11 지금 그리는 손 · 강제 지정 상태
       petMeter:Math.round(hand3dTouch.pet*100)/100, strokes:hand3dTouch.strokes,
       curls:Object.fromEntries(Object.entries(hand3dPose.curls).map(([k,v])=>[k,Math.round(v*100)/100])) },
     handRealtime:{ presence:Math.round(handPresence*100)/100, tracking:!!currentSimulationHand(),
       curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate,
       infPath, infHz, infMs, e2eMs:Math.round(e2eMs), e2eSrc,
-      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v10-hand-chirality-size' },
+      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v11.2-right-hand-deep-occlusion' },
     palmSync:{ phase:palmSync.phase, ratio:Math.round(palmSync.ratio*100)/100,
       matched:palmSync.matched, held:Math.round(palmSync.t*100)/100, need:PALMSYNC_SEC,
       done:palmSync.done, hint:palmSync.hint, samples:palmSync.sd.length,
@@ -3670,12 +3894,32 @@ window.__MUNG__ = {
   selectScenario: id => setScenario(id,'qa_api'),
   input: cmd => command(cmd,'qa_api'),
   setSimulationPhase: phase => setSimulationPhase(phase,'qa_api'),
+  // 순수 기하 조회: 화면 좌표 하나가 강아지의 어느 부위로 판정되는지 (QA가 기하를 복제하지 않도록)
+  dogHit: (x,y) => ({ ...dogSurfaceHit(x,y), zones:dogSurface() }),
+  /* ★v11.2 가림을 '픽셀로' 잰다. 베일 캔버스의 불투명도(veil)만 보면 강아지 픽셀이 하나도
+     없는 허공에서도 값이 올라가서 통과해 버린다(v11.2 초기에 실제로 그랬다). 그래서 손이
+     차지한 원 안에서 '강아지가 실제로 덮은 픽셀 비율'을 직접 센다. QA 전용, 온디맨드. */
+  veilCover: () => {
+    const T=hand3dTouch, cv=$('dogVeil');
+    if (!cv || !cv.width) return { cover:0, alpha:0, err:'no canvas' };
+    const a=+(cv.style.opacity||0);
+    const dpr=Math.min(devicePixelRatio||1,2);
+    const rad=Math.max(40,(hand3dSizeFrac||.3)*innerHeight*.34);
+    const x0=Math.max(0,Math.round((T.cx-rad)*dpr)), y0=Math.max(0,Math.round((T.cy-rad)*dpr));
+    const w=Math.min(cv.width-x0,Math.round(rad*2*dpr)), h=Math.min(cv.height-y0,Math.round(rad*2*dpr));
+    if (w<=0||h<=0) return { cover:0, alpha:a, err:'offscreen' };
+    const d=cv.getContext('2d').getImageData(x0,y0,w,h).data;
+    let n=0, hitp=0;
+    for (let i=3;i<d.length;i+=4*3){ n++; if (d[i]>60) hitp++; }
+    return { cover:Math.round(hitp/Math.max(1,n)*a*1000)/1000, raw:Math.round(hitp/Math.max(1,n)*1000)/1000,
+             alpha:a, radPx:Math.round(rad), cx:Math.round(T.cx), cy:Math.round(T.cy) };
+  },
   palmSyncStart: () => palmSyncStart(),
   palmSyncSkip:  () => palmSyncFinish(false),
   palmSyncTarget: () => palmSyncTarget(),
   // 동기화가 진행 중이 아니어도 목표 원 대비 현재 손의 크기·위치를 읽을 수 있게 한다
   palmSyncProbe: () => { const now=performance.now();
-    const m=palmSyncMeasure(handSnap && now-handSnap.ts<650 ? handSnap : null);
+    const m=palmSyncMeasure(handSnap && now-handSnap.ts<handSnapMaxAge() ? handSnap : null);
     return { ratio:m.ratio, near:m.near, dx:m.dx, dy:m.dy, tr:m.tr,
              tx:Math.round(m.tp.x), ty:Math.round(m.tp.y), aimM:palmSync.aim,
              kPx:palmSync.kPx, distM:Math.round(hand3dDepth.distM*1000)/1000 }; },
