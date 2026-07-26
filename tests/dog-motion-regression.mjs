@@ -24,8 +24,13 @@ assert.doesNotMatch(
 );
 assert.match(
   renderer,
-  /const gazeX=hand\?/,
+  /const gazeX=handVisible\?/,
   'dog motion must visually attend to the tracked hand'
+);
+assert.match(
+  renderer,
+  /const handVisible=!!hand&&Number\.isFinite\(hand\.x\)&&Number\.isFinite\(hand\.y\)/,
+  'a transient invalid hand frame must not corrupt dog motion transforms'
 );
 assert.match(
   renderer,

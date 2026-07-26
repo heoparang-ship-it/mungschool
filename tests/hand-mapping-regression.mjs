@@ -100,5 +100,15 @@ assert.match(
   /targetZ=3\.9-zn\*3\.72/,
   'depth must still traverse the full room from z=3.9 to z=0.18'
 );
+assert.match(
+  html,
+  /const clamp01 = n => Math\.max\(0,Math\.min\(1,finiteOr\(n,0\)\)\)/,
+  'one invalid camera sample must be contained before it reaches depth and size mapping'
+);
+assert.match(
+  html,
+  /const sx=finiteOr\(\(v\.x\*\.5\+\.5\)\*innerWidth/,
+  'an invalid 3D projection must preserve the last visible hand position'
+);
 
 console.log('hand mapping regression: PASS');
