@@ -2976,7 +2976,8 @@ function palmSyncTick(dt, now, snap){
    넘어가면 기존 자동 학습(앞뒤 왕복으로 기준을 배우는 경로)이 그대로 이어받는다. */
 $('palmSyncSkip')?.addEventListener('click', ()=>{ palmSyncFinish(false);
   toast('동기화를 건너뜁니다 — 손을 앞뒤로 한 번 왕복해 주세요'); });
-const _hq = { m:new THREE.Matrix4(), q:new THREE.Quaternion(), e:new THREE.Euler(), id:new THREE.Quaternion() };
+const _hq = { m:new THREE.Matrix4(), q:new THREE.Quaternion(), e:new THREE.Euler(),
+              id:new THREE.Quaternion(), viewFlip:new THREE.Matrix4().makeScale(1,1,-1) };
 function handOrientTarget(qOut){
   const snap=handSnap;
   if (!snap || !snap.pts3 || performance.now()-snap.ts>650) return false;
@@ -2996,6 +2997,11 @@ function handOrientTarget(qOut){
   u.sub(n.clone().multiplyScalar(u.dot(n))).normalize();   // u ⟂ n 직교화
   const r=new THREE.Vector3().crossVectors(u,n);     // 오른손계 가로축
   _hq.m.makeBasis(r,u,n);
+  /* 전면 카메라는 화면/강아지 쪽에서 사용자를 바라보고, 게임 손은 사용자의 눈에서
+     강아지 쪽을 바라보는 1인칭 손이다. 위치 좌표는 이미 셀피 미러로 맞으므로 그대로 두고,
+     회전만 z 반사로 켤레변환(C·R·C)한다. 중립 자세는 유지되지만 뒤집기 방향이 반전되어
+     오른손 엄지가 화면 좌우로 도는 대신 사용자 쪽 깊이를 통과한다. */
+  _hq.m.premultiply(_hq.viewFlip).multiply(_hq.viewFlip);
   qOut.setFromRotationMatrix(_hq.m);
   return true;
 }
@@ -4021,7 +4027,7 @@ window.__MUNG__ = {
     handRealtime:{ presence:Math.round(handPresence*100)/100, tracking:!!currentSimulationHand(),
       curl:Math.round(handTrack.curl*100)/100, delegate:visionDelegate,
       infPath, infHz, infMs, e2eMs:Math.round(e2eMs), e2eSrc,
-      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v12.3-real-camera-palm-fix' },
+      gsrc:handSnap?.gsrc||'', every:gEveryMain, cam:{...camInfo}, build:'v13-first-person-hand-frame' },
     palmSync:{ phase:palmSync.phase, ratio:Math.round(palmSync.ratio*100)/100,
       matched:palmSync.matched, held:Math.round(palmSync.t*100)/100, need:PALMSYNC_SEC,
       done:palmSync.done, hint:palmSync.hint, samples:palmSync.sd.length,

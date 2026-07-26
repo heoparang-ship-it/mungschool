@@ -15,6 +15,44 @@ assert.doesNotMatch(
   'do not swap palm/back by reversing the live tracking basis'
 );
 
+// The front camera looks from the dog/screen toward the player, while the
+// rendered hand must be seen from the player's eyes toward the dog. Conjugating
+// by a z reflection reverses the observed turn without changing neutral pose.
+assert.match(
+  html,
+  /viewFlip:new THREE\.Matrix4\(\)\.makeScale\(1,1,-1\)/,
+  'hand orientation must declare the camera-to-first-person view transform'
+);
+assert.match(
+  html,
+  /_hq\.m\.premultiply\(_hq\.viewFlip\)\.multiply\(_hq\.viewFlip\)/,
+  'hand rotation must be conjugated into the first-person view frame'
+);
+
+// A positive camera-space yaw must become a negative first-person yaw. This is
+// the invariant that makes the right thumb sweep toward the player instead of
+// rotating like a person standing on the dog's side.
+const c = Math.cos(Math.PI / 4);
+const s = Math.sin(Math.PI / 4);
+const cameraYaw = [
+  [c, 0, s],
+  [0, 1, 0],
+  [-s, 0, c],
+];
+const reflectZ = [1, 1, -1];
+const firstPersonYaw = cameraYaw.map((row, y) =>
+  row.map((value, x) => reflectZ[y] * value * reflectZ[x])
+);
+assert.ok(cameraYaw[0][2] > 0, 'fixture must start with positive camera yaw');
+assert.ok(firstPersonYaw[0][2] < 0, 'first-person conversion must reverse the turn direction');
+
+// Position tracking is already correct and must remain selfie-mirrored.
+assert.match(
+  html,
+  /return \{ x: mirrored \? W - px : px, y: oy \+ ny\*dh \};/,
+  'first-person orientation changes must not alter left/right position tracking'
+);
+
 // Palm/back correction belongs to the model's fixed finger axis.
 assert.match(
   html,
