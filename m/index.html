@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>멍스쿨 모바일 · 표정을 읽는 연습</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="description" content="실제 개 없이, 강아지의 신호를 읽는 법을 연습하는 앱">
+<meta name="theme-color" content="#3EC2A2">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐕</text></svg>">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  :root{
+    --st:env(safe-area-inset-top,0px); --sb:env(safe-area-inset-bottom,0px);
+    --cream:#FFFAF2; --ink:#2C3F3A; --sub:#7D9A92; --line:#E3EEE9;
+    --mint:#3EC2A2; --mint-d:#1E8C74; --amber:#FFB454; --amber-d:#D9832B;
+    --coral:#FF7A6B; --stop:#C0392B; --sky:#7CC4F0;
+  }
+  html,body{height:100%}
+  body{background:var(--cream);color:var(--ink);overflow:hidden;user-select:none;-webkit-user-select:none;
+       font-family:'Pretendard','Apple SD Gothic Neo',-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.6}
+  button{font-family:inherit}
+  .scr{position:fixed;inset:0;display:none;flex-direction:column;padding-top:var(--st);padding-bottom:var(--sb)}
+  .scr.on{display:flex;animation:in .32s cubic-bezier(.2,.9,.3,1)}
+  @keyframes in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  /* ═══ 홈 ═══ */
+  #room{position:absolute;left:0;right:0;top:0;height:64%;
+        background:radial-gradient(120% 90% at 60% 20%,#E6F5EE 0%,#FFF6E8 70%,transparent 100%);}
+  .bar{position:relative;z-index:3;display:flex;gap:7px;align-items:center;padding:12px 14px 0;flex-wrap:wrap}
+  .chip{display:flex;align-items:center;gap:5px;padding:7px 11px;border-radius:999px;background:#fff;
+        box-shadow:0 3px 12px rgba(60,110,95,.12);font-size:12px;font-weight:800;color:#4a6d64}
+  .chip b{font-size:14px;color:var(--mint-d)}
+  .chip.fire b{color:var(--amber-d)}
+  .grow{flex:1}
+  #lvw{position:relative;z-index:3;margin:9px 14px 0}
+  #lvb{height:9px;border-radius:6px;background:rgba(62,194,162,.18);overflow:hidden}
+  #lvb i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,#6DD6BB,#1E8C74);
+         transition:width .9s cubic-bezier(.2,.9,.3,1)}
+  #lvt{display:flex;justify-content:space-between;margin-top:5px;font-size:10.5px;font-weight:800;color:var(--sub)}
+  #stage{position:relative;z-index:2;flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
+  #homeCv{width:min(320px,80vw);height:100%;max-height:46vh;display:block}
+  #bubble{position:absolute;left:50%;top:6%;transform:translateX(-50%) scale(.92);padding:9px 15px;border-radius:16px;
+          background:#fff;color:#41645c;font-size:12.5px;font-weight:800;white-space:nowrap;opacity:0;
+          box-shadow:0 6px 18px rgba(60,110,95,.16);transition:opacity .3s,transform .3s;z-index:4}
+  #bubble.on{opacity:1;transform:translateX(-50%) scale(1)}
+  #bubble::after{content:'';position:absolute;left:50%;bottom:-6px;margin-left:-6px;border:6px solid transparent;
+                 border-top-color:#fff;border-bottom:0}
+  #acts{position:relative;z-index:3;padding:0 14px 16px}
+  .big{width:100%;border:0;border-radius:20px;padding:17px 18px;color:#fff;text-align:left;
+       background:linear-gradient(140deg,#6DD6BB,#1E8C74);box-shadow:0 10px 24px rgba(30,140,116,.28);
+       transition:transform .16s;display:flex;align-items:center;gap:12px}
+  .big:active{transform:translateY(2px) scale(.99)}
+  .big em{font-style:normal;font-size:26px;line-height:1}
+  .big span{flex:1}
+  .big strong{display:block;font-size:16.5px;font-weight:1000;letter-spacing:-.4px}
+  .big small{display:block;margin-top:2px;font-size:11.5px;font-weight:700;opacity:.9}
+  .ghost{width:100%;margin-top:9px;border:0;border-radius:16px;padding:13px;background:rgba(255,255,255,.9);
+         color:#4a6d64;font-size:13px;font-weight:800;box-shadow:0 3px 10px rgba(60,110,95,.1)}
+
+  /* ═══ 훈련 ═══ */
+  #train{background:linear-gradient(#F2F9F5,#FFF8EE)}
+  .thead{display:flex;align-items:center;gap:10px;padding:12px 14px 8px}
+  .back{width:38px;height:38px;flex:none;border:0;border-radius:12px;background:rgba(255,255,255,.92);
+        font-size:17px;color:#4a6d64;box-shadow:0 3px 10px rgba(60,110,95,.1)}
+  #prog{flex:1;height:9px;border-radius:6px;background:rgba(62,194,162,.18);overflow:hidden}
+  #prog i{display:block;height:100%;background:linear-gradient(90deg,#6DD6BB,#1E8C74);transition:width .4s}
+  #qn{font-size:12px;font-weight:900;color:var(--sub);min-width:34px;text-align:right}
+  #exBadge{margin:0 14px;padding:6px 11px;border-radius:999px;background:rgba(255,180,84,.18);
+           color:var(--amber-d);font-size:11px;font-weight:900;align-self:flex-start}
+  #tstage{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;position:relative}
+  #trainCv{width:min(300px,74vw);height:100%;max-height:36vh;display:block}
+  #ask{text-align:center;font-size:16px;font-weight:1000;letter-spacing:-.4px;padding:2px 16px 10px}
+  #opts{padding:0 12px calc(var(--sb) + 12px);display:grid;gap:9px}
+  .opt{width:100%;min-height:56px;border:2px solid var(--line);border-radius:16px;background:#fff;
+       color:var(--ink);font-size:14.5px;font-weight:800;padding:10px 14px;text-align:left;
+       display:flex;align-items:center;gap:10px;transition:transform .14s,border-color .2s,background .2s}
+  .opt em{font-style:normal;font-size:20px}
+  .opt:active{transform:scale(.985)}
+  .opt.right{border-color:var(--mint);background:rgba(62,194,162,.1)}
+  .opt.wrong{border-color:var(--coral);background:rgba(255,122,107,.1)}
+  .opt.dim{opacity:.45}
+
+  /* 피드백 시트 */
+  #fb{position:fixed;inset:0;z-index:60;display:none;align-items:flex-end;background:rgba(38,62,56,.34)}
+  #fb.on{display:flex}
+  #fbc{width:100%;border-radius:24px 24px 0 0;background:var(--cream);padding:20px 18px calc(var(--sb) + 16px);
+       animation:up .3s cubic-bezier(.2,.9,.3,1);box-shadow:0 -12px 40px rgba(40,80,68,.2)}
+  @keyframes up{from{transform:translateY(100%)}to{transform:none}}
+  #fbTop{display:flex;align-items:center;gap:10px}
+  #fbIcon{font-size:30px}
+  #fbTitle{font-size:19px;font-weight:1000;letter-spacing:-.5px}
+  #fbTier{margin-left:auto;padding:5px 11px;border-radius:999px;font-size:11px;font-weight:900}
+  .row{margin-top:12px;padding:12px 14px;border-radius:14px;background:#fff;box-shadow:0 2px 8px rgba(60,110,95,.07)}
+  .row b{display:block;font-size:11px;font-weight:900;color:var(--mint-d);letter-spacing:.3px}
+  .row p{margin-top:3px;font-size:13.5px;line-height:1.65}
+  .row.todo{background:rgba(62,194,162,.11);box-shadow:none}
+  .row.todo b{color:var(--mint-d)}
+  #fbGo{width:100%;min-height:54px;margin-top:15px;border:0;border-radius:16px;
+        background:linear-gradient(140deg,#6DD6BB,#1E8C74);color:#fff;font-size:16px;font-weight:1000}
+
+  /* ═══ 결과 ═══ */
+  #res{background:linear-gradient(#F2F9F5,#FFF8EE);overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .rw{padding:20px 16px calc(var(--sb) + 20px);max-width:520px;margin:0 auto;width:100%}
+  #rEmo{font-size:52px;text-align:center}
+  #rTitle{margin-top:8px;font-size:23px;font-weight:1000;text-align:center;letter-spacing:-.6px}
+  #rSub{margin-top:5px;font-size:13.5px;color:var(--sub);text-align:center;font-weight:700}
+  #rScore{display:flex;gap:9px;margin-top:18px}
+  .sc{flex:1;background:#fff;border-radius:16px;padding:13px 8px;text-align:center;box-shadow:0 3px 10px rgba(60,110,95,.1)}
+  .sc b{display:block;font-size:22px;font-weight:1000;color:var(--mint-d)}
+  .sc small{display:block;font-size:10.5px;color:var(--sub);font-weight:800;margin-top:2px}
+  #missWrap{margin-top:18px}
+  #missWrap h3{font-size:14px;font-weight:1000;margin-bottom:8px}
+  .miss{display:flex;align-items:center;gap:10px;background:#fff;border-radius:14px;padding:11px 13px;margin-bottom:7px;
+        box-shadow:0 2px 8px rgba(60,110,95,.07)}
+  .miss em{font-style:normal;font-size:21px}
+  .miss span{flex:1}
+  .miss b{display:block;font-size:13.5px;font-weight:900}
+  .miss small{display:block;font-size:11px;color:var(--sub);font-weight:700}
+  .lock{display:flex;gap:10px;align-items:center;margin-top:10px;padding:14px;border-radius:16px;
+        background:linear-gradient(135deg,rgba(255,180,84,.16),rgba(255,122,107,.1));border:1.5px dashed var(--amber)}
+  .lock em{font-style:normal;font-size:22px}
+  .lock b{display:block;font-size:13px;font-weight:900;color:var(--amber-d)}
+  .lock small{display:block;font-size:11.5px;color:#8a6a3a;font-weight:700;margin-top:2px}
+  #grew{margin-top:16px;padding:15px;border-radius:16px;background:rgba(62,194,162,.12);text-align:center;display:none}
+  #grew.on{display:block}
+  #grew b{font-size:15px;font-weight:1000;color:var(--mint-d)}
+  #grew small{display:block;font-size:12px;color:#4d7a6e;margin-top:3px;font-weight:700}
+  #rBtns{margin-top:18px;display:grid;gap:9px}
+  #rBtns button{min-height:54px;border:0;border-radius:16px;font-size:15.5px;font-weight:1000}
+  #rAgain{background:linear-gradient(140deg,#6DD6BB,#1E8C74);color:#fff}
+  #rHome{background:#fff;color:#4a6d64;box-shadow:0 3px 10px rgba(60,110,95,.1)}
+
+  #toast{position:fixed;left:50%;bottom:calc(var(--sb) + 92px);transform:translateX(-50%) translateY(12px);
+         z-index:90;padding:11px 18px;border-radius:14px;background:rgba(35,58,52,.94);color:#fff;
+         font-size:12.5px;font-weight:800;opacity:0;transition:opacity .28s,transform .28s;pointer-events:none;max-width:86vw;text-align:center}
+  #toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  #boot{position:fixed;inset:0;z-index:99;display:flex;align-items:center;justify-content:center;
+        background:var(--cream);flex-direction:column;gap:14px;color:var(--sub);font-size:13px;font-weight:700}
+  #boot.off{display:none}
+  #boot .dot{width:34px;height:34px;border-radius:50%;border:3px solid rgba(62,194,162,.25);border-top-color:var(--mint);
+             animation:spin .9s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #bootErr{display:none;max-width:80vw;text-align:center;color:var(--stop);font-weight:800;line-height:1.7}
+</style>
+</head>
+<body>
+
+<div id="boot"><div class="dot"></div><span id="bootMsg">멍이를 깨우는 중…</span><div id="bootErr"></div></div>
+
+<!-- ══ 홈 ══ -->
+<section class="scr on" id="home">
+  <div id="room"></div>
+  <div class="bar">
+    <div class="chip">유대 <b id="cBond">0</b></div>
+    <div class="chip fire">🔥 <b id="cStreak">0</b>일</div>
+    <div class="grow"></div>
+    <div class="chip">🎓 <b id="cLearn">0</b>/10</div>
+  </div>
+  <div id="lvw">
+    <div id="lvb"><i id="lvFill"></i></div>
+    <div id="lvt"><span id="lvL">아기 · 낯선 사이</span><span id="lvR">0 / 4</span></div>
+  </div>
+  <div id="stage">
+    <div id="bubble">안녕!</div>
+    <canvas id="homeCv"></canvas>
+  </div>
+  <div id="acts">
+    <button class="big" id="btnTrain"><em>🐾</em><span><strong>오늘의 훈련</strong><small>멍이의 신호를 읽어 보세요 · 5문제</small></span></button>
+    <button class="ghost" id="btnAbout">이 앱은 무엇인가요?</button>
+  </div>
+</section>
+
+<!-- ══ 훈련 ══ -->
+<section class="scr" id="train">
+  <div class="thead">
+    <button class="back" id="tBack">←</button>
+    <div id="prog"><i id="progFill"></i></div>
+    <div id="qn">1/5</div>
+  </div>
+  <div id="exBadge">과장 100% · 크게 보여 줍니다</div>
+  <div id="tstage"><canvas id="trainCv"></canvas></div>
+  <div id="ask">지금 멍이는 어떤 상태일까요?</div>
+  <div id="opts"></div>
+</section>
+
+<!-- ══ 결과 ══ -->
+<section class="scr" id="res"><div class="rw">
+  <div id="rEmo">🐕</div>
+  <div id="rTitle">훈련 완료</div>
+  <div id="rSub"></div>
+  <div id="rScore">
+    <div class="sc"><b id="scRight">0</b><small>맞힌 신호</small></div>
+    <div class="sc"><b id="scRate">0%</b><small>정답률</small></div>
+    <div class="sc"><b id="scBond">+0</b><small>유대</small></div>
+  </div>
+  <div id="grew"><b></b><small></small></div>
+  <div id="missWrap"></div>
+  <div id="rBtns">
+    <button id="rAgain">한 번 더</button>
+    <button id="rHome">멍이에게 돌아가기</button>
+  </div>
+</div></section>
+
+<!-- 피드백 -->
+<div id="fb"><div id="fbc">
+  <div id="fbTop"><span id="fbIcon">✅</span><span id="fbTitle">정답</span><span id="fbTier">주의</span></div>
+  <div class="row"><b>무엇이 보였나요</b><p id="fbSee"></p></div>
+  <div class="row"><b>무슨 뜻인가요</b><p id="fbMean"></p></div>
+  <div class="row todo"><b>사람은 무엇을 해야 하나요</b><p id="fbTodo"></p></div>
+  <button id="fbGo">다음</button>
+</div></div>
+
+<div id="toast"></div>
+
+<script type="module">
+import { createDogView, STAGES, stageFor } from './dog.js';
+import { SIGNALS, tierOf } from './signals.js';
+
+const $ = id => document.getElementById(id);
+const boot = m => { $('bootMsg').textContent = m; };
+const fail = m => { $('boot').classList.remove('off'); $('bootMsg').style.display='none';
+  document.querySelector('#boot .dot').style.display='none';
+  const e=$('bootErr'); e.style.display='block'; e.textContent=m; };
+
+/* ═══ 저장 상태 ═══ */
+const KEY = 'mungschool-mobile-v1';
+const DEF = { v:1, bond:0, learned:[], miss:{}, streak:0, lastDay:'', sessions:0, best:0, rounds:0 };
+let G = {};
+const today = () => { const d=new Date(); return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`; };
+function load(){ let o={}; try{o=JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){}
+  G={}; for(const k in DEF) G[k]= o[k]!=null ? o[k] : (Array.isArray(DEF[k])?[]:typeof DEF[k]==='object'?{}:DEF[k]);
+  if(!Array.isArray(G.learned)) G.learned=[]; if(typeof G.miss!=='object'||!G.miss) G.miss={};
+}
+const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(G)) }catch(e){} };
+
+/* ═══ 뷰 ═══ */
+let homeDog=null, trainDog=null;
+const show = id => { document.querySelectorAll('.scr').forEach(s=>s.classList.toggle('on', s.id===id));
+  if(id==='home') homeDog && homeDog.refit(); if(id==='train') trainDog && trainDog.refit(); };
+let toT=0; const toast = m => { clearTimeout(toT); const t=$('toast'); t.textContent=m; t.classList.add('on');
+  toT=setTimeout(()=>t.classList.remove('on'),2200); };
+let buT=0; const say = (m,ms) => { clearTimeout(buT); const b=$('bubble'); b.textContent=m; b.classList.add('on');
+  buT=setTimeout(()=>b.classList.remove('on'), ms||2800); };
+
+/* ═══ 홈 그리기 ═══ */
+function paintHome(){
+  const st = stageFor(G.learned.length);
+  const idx = STAGES.indexOf(st);
+  const need = [4,8,10][idx];
+  const from = [0,4,8][idx];
+  $('cBond').textContent = Math.round(G.bond);
+  $('cStreak').textContent = G.streak;
+  $('cLearn').textContent = G.learned.length;
+  const into = Math.min(G.learned.length - from, need - from);
+  $('lvFill').style.width = Math.max(0, Math.min(100, into/(need-from)*100)) + '%';
+  const rel = G.bond<20?'낯선 사이':G.bond<45?'조금 익숙':G.bond<80?'편안해짐':'단짝';
+  $('lvL').textContent = `${st.name} · ${rel}`;
+  $('lvR').textContent = `${G.learned.length} / ${need}`;
+  if (homeDog) homeDog.setStage(st);
+}
+
+/* ═══ 훈련 로직 ═══ */
+const ROUND = 5;
+let round = null;
+
+function pickQuestions(){
+  // 못 읽은 신호를 우선 출제 (놓친 신호 복습 — 무료로 제공하는 진단의 씨앗)
+  const pool = SIGNALS.slice();
+  pool.sort((a,b)=>((G.miss[b.id]||0)-(G.miss[a.id]||0)) + (Math.random()-.5)*0.8);
+  const head = pool.slice(0,3), rest = pool.slice(3).sort(()=>Math.random()-.5);
+  return head.concat(rest).slice(0,ROUND).sort(()=>Math.random()-.5);
+}
+function optionsFor(sig){
+  const others = SIGNALS.filter(s=>s.id!==sig.id).sort(()=>Math.random()-.5).slice(0,2);
+  return [sig,...others].sort(()=>Math.random()-.5);
+}
+/** 라운드가 진행될수록 과장을 줄인다 — 난이도 사다리 축 1 */
+const exFor = i => Math.max(0.15, 1 - i * (0.85/(ROUND-1)));
+
+function startRound(){
+  round = { qs: pickQuestions(), i:0, right:0, missed:[], gained:0 };
+  show('train'); nextQ();
+}
+function nextQ(){
+  if (round.i >= round.qs.length) return finish();
+  const sig = round.qs[round.i];
+  const ex = exFor(round.i);
+  $('progFill').style.width = (round.i/ROUND*100)+'%';
+  $('qn').textContent = `${round.i+1}/${ROUND}`;
+  $('exBadge').textContent = ex>0.75 ? '과장 100% · 크게 보여 줍니다'
+    : ex>0.45 ? `과장 ${Math.round(ex*100)}% · 조금 작아졌어요`
+    : `과장 ${Math.round(ex*100)}% · 실제 개에 가까워요`;
+  trainDog.play(sig.pose, ex);
+  const opts = optionsFor(sig);
+  const box = $('opts'); box.innerHTML='';
+  opts.forEach(o=>{
+    const b = document.createElement('button');
+    b.className='opt'; b.innerHTML = `<em>${o.emoji}</em><span>${o.name}</span>`;
+    b.onclick = ()=>answer(b, o, sig, opts);
+    box.appendChild(b);
+  });
+}
+function answer(btn, chosen, sig, opts){
+  const box = $('opts');
+  [...box.children].forEach(c=>{ c.onclick=null; c.classList.add('dim'); });
+  const ok = chosen.id === sig.id;
+  btn.classList.remove('dim'); btn.classList.add(ok?'right':'wrong');
+  if(!ok){ const ri=opts.indexOf(sig); if(box.children[ri]){ box.children[ri].classList.remove('dim'); box.children[ri].classList.add('right'); } }
+  if(ok){ round.right++; G.miss[sig.id]=Math.max(0,(G.miss[sig.id]||0)-1); }
+  else { round.missed.push(sig); G.miss[sig.id]=(G.miss[sig.id]||0)+1; }
+  save();
+  setTimeout(()=>openFb(ok, sig), 520);
+}
+function openFb(ok, sig){
+  const t = tierOf(sig.tier);
+  $('fbIcon').textContent = ok?'✅':'💡';
+  $('fbTitle').textContent = ok?'맞혔어요':`이건 «${sig.name}»이에요`;
+  const tb=$('fbTier'); tb.textContent=t.label; tb.style.background=t.color+'22'; tb.style.color=t.color;
+  $('fbSee').textContent = sig.see; $('fbMean').textContent = sig.mean; $('fbTodo').textContent = sig.todo;
+  $('fbGo').textContent = round.i>=ROUND-1 ? '결과 보기' : '다음';
+  $('fb').classList.add('on');
+}
+$('fbGo').onclick = ()=>{ $('fb').classList.remove('on'); round.i++; nextQ(); };
+
+function finish(){
+  $('progFill').style.width='100%';
+  const rate = Math.round(round.right/ROUND*100);
+  const before = stageFor(G.learned.length);
+  // 맞힌 신호는 «배운 것»으로 기록 (중복 없이)
+  round.qs.forEach((s,i)=>{ if(!round.missed.includes(s) && !G.learned.includes(s.id)) G.learned.push(s.id); });
+  const gain = round.right*2 + (rate===100?4:0);
+  G.bond = Math.min(100, G.bond + gain);
+  G.rounds++; G.best=Math.max(G.best, rate);
+  const d=today();
+  if(G.lastDay!==d){ const y=new Date(Date.now()-864e5); const ys=`${y.getFullYear()}-${y.getMonth()+1}-${y.getDate()}`;
+    G.streak = (G.lastDay===ys)?G.streak+1:1; G.lastDay=d; }
+  save();
+  const after = stageFor(G.learned.length);
+
+  $('rEmo').textContent = rate===100?'🎉':rate>=60?'🐕':'🐶';
+  $('rTitle').textContent = rate===100?'완벽했어요!':rate>=60?'잘하고 있어요':'천천히 다시 해볼까요';
+  $('rSub').textContent = rate===100?'멍이의 신호를 전부 읽어냈어요'
+    : `${ROUND}개 중 ${round.right}개를 읽어냈어요`;
+  $('scRight').textContent = round.right;
+  $('scRate').textContent = rate+'%';
+  $('scBond').textContent = '+'+gain;
+
+  const g=$('grew');
+  if(after!==before){ g.classList.add('on');
+    g.querySelector('b').textContent = `멍이가 자랐어요 — ${after.name}`;
+    g.querySelector('small').textContent = `${before.ratio}등신 → ${after.ratio}등신`;
+  } else g.classList.remove('on');
+
+  const mw=$('missWrap');
+  if(round.missed.length){
+    mw.innerHTML = `<h3>놓친 신호 ${round.missed.length}개</h3>` +
+      round.missed.map(s=>`<div class="miss"><em>${s.emoji}</em><span><b>${s.name}</b><small>${s.mean}</small></span></div>`).join('') +
+      `<div class="lock"><em>🔒</em><div><b>이 신호만 모아서 다시 연습하기</b><small>내가 자꾸 놓치는 신호를 집중 훈련하는 기능은 준비 중이에요</small></div></div>`;
+  } else {
+    mw.innerHTML = `<h3>놓친 신호 없음</h3><div class="miss"><em>✨</em><span><b>전부 읽어냈어요</b><small>다음엔 더 작은 신호에 도전해 보세요</small></span></div>`;
+  }
+  show('res'); paintHome();
+}
+
+/* ═══ 배선 ═══ */
+$('btnTrain').onclick = startRound;
+$('tBack').onclick = ()=>{ show('home'); trainDog && trainDog.idle(); };
+$('rAgain').onclick = startRound;
+$('rHome').onclick = ()=>{ show('home'); const st=stageFor(G.learned.length);
+  say(G.learned.length>=8?'많이 배웠구나!':G.learned.length>=4?'점점 잘 읽네!':'또 만나서 반가워!'); };
+$('btnAbout').onclick = ()=>toast('실제 개 없이, 강아지가 보내는 신호를 읽는 연습을 하는 앱이에요');
+
+/* ═══ 부팅 ═══ */
+try{
+  load();
+  boot('멍이를 그리는 중…');
+  homeDog = createDogView($('homeCv'));
+  trainDog = createDogView($('trainCv'));
+  paintHome();
+  $('boot').classList.add('off');
+  const d=today();
+  setTimeout(()=>{
+    if(G.rounds===0) say('처음 만나서 반가워!', 3400);
+    else if(G.lastDay===d) say('오늘도 왔구나!');
+    else say('기다리고 있었어!');
+  }, 500);
+  window.__MM__ = { state:()=>G, reset:()=>{ try{localStorage.removeItem(KEY)}catch(e){} location.reload(); },
+    grant:n=>{ G.learned = SIGNALS.slice(0,n).map(s=>s.id); save(); paintHome(); } };
+}catch(e){
+  fail('불러오지 못했습니다: ' + (e && e.message ? e.message : e));
+}
+</script>
+</body>
+</html>
