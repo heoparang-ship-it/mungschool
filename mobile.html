@@ -4598,6 +4598,24 @@ function loop(t) {
   requestAnimationFrame(loop);
 }
 // 운영·QA 전용 읽기 인터페이스: 개인영상·음성·랜드마크는 노출하지 않는다.
+/* ★모바일 게임 레이어 제어면 — 읽기 + 안전한 연출 원시동작만. */
+window.__MUNGX__ = {
+  hand: () => handSnap ? { g:handSnap.gesture||'', ts:handSnap.ts,
+                           known:!!handSnap.known, age:performance.now()-handSnap.ts } : null,
+  sim: () => simExperience,
+  phase: (p, why) => { try { setSimulationPhase(p, why||'game'); } catch(e){} },
+  trust: (v) => { simExperience.trust = Math.max(0, Math.min(100, v)); },
+  score: (v) => { simExperience.score = Math.max(0, v|0); },
+  mark: (c) => { try { markCommand(c); } catch(e){} },
+  pop: (t) => { try { wordPop(t); } catch(e){} },
+  sfx: (k) => { try { ensureSfx(); playSfx(k); } catch(e){} },
+  buzz: (ms) => { try { haptic(ms); } catch(e){} },
+  burst: () => { try { fireBurst(); } catch(e){} },
+  reward: (t, s) => { try { showSimulationReward(t, s); } catch(e){} },
+  toast: (m) => { try { toast(m); } catch(e){} },
+  started: () => !!simExperience.started,
+  GESTURE_MAP, GESTURE_KO
+};
 window.__MUNG__ = {
   getState: () => ({
     scenario:activeScenario, scenarioName:SCENARIOS[activeScenario].name, step:scenarioStep,
@@ -4818,6 +4836,88 @@ requestAnimationFrame(loop);
   }, 400);
 
   paint();
+})();
+</script>
+<style id="mung-app-bridge">
+  #abTop{position:fixed;z-index:8000;left:0;right:0;top:0;display:none;
+    align-items:center;gap:10px;padding:calc(env(safe-area-inset-top,0px) + 9px) 12px 9px;
+    background:linear-gradient(rgba(12,30,26,.90),rgba(12,30,26,.62));
+    font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;}
+  #abTop.on{display:flex;}
+  #abBack{width:38px;height:38px;flex:none;border:0;border-radius:12px;
+    background:rgba(255,255,255,.16);color:#fff;font-size:17px;}
+  #abName{flex:1;color:#eafaf4;font-size:14px;font-weight:900;letter-spacing:-.3px;}
+  #abName small{display:block;font-size:10.5px;font-weight:700;color:#9fcabd;margin-top:2px;}
+  #abDone{flex:none;min-height:38px;padding:0 14px;border:0;border-radius:12px;
+    background:#3ec2a2;color:#06231c;font-size:13px;font-weight:1000;}
+  #abEnd{position:fixed;inset:0;z-index:8001;display:none;align-items:center;justify-content:center;
+    padding:22px;background:rgba(226,242,232,.90);backdrop-filter:blur(10px);}
+  #abEnd.on{display:flex;}
+  #abCard{width:100%;max-width:330px;border-radius:24px;padding:24px 20px 18px;background:#fffaf2;
+    text-align:center;box-shadow:0 24px 60px rgba(50,90,78,.24);
+    font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;color:#2c3f3a;}
+  #abStars{font-size:34px;letter-spacing:4px;color:#e0982f;}
+  #abTitle{margin-top:10px;font-size:19px;font-weight:1000;}
+  #abSub{margin-top:6px;font-size:12.5px;color:#5f7f77;font-weight:600;line-height:1.6;}
+  #abGo{width:100%;min-height:52px;margin-top:16px;border:0;border-radius:16px;
+    background:linear-gradient(140deg,#6dd6bb,#249b81);color:#fff;font-size:16px;font-weight:1000;}
+</style>
+<div id="abTop"><button id="abBack" type="button">←</button>
+  <div id="abName">훈련<small>손 신호로 멍이에게 말해 보세요</small></div>
+  <button id="abDone" type="button">훈련 끝내기</button></div>
+<div id="abEnd"><div id="abCard">
+  <div id="abStars">☆☆☆</div><div id="abTitle">훈련 완료</div>
+  <div id="abSub"></div><button id="abGo" type="button">돌아가기</button></div></div>
+<script>
+/* app.html ↔ mobile.html 브리지. 모듈 내부는 건드리지 않고 __MUNGX__ 만 읽는다. */
+(function(){
+  var $=function(i){return document.getElementById(i);};
+  var qs=new URLSearchParams(location.search);
+  if (qs.get('from')!=='app') return;                 // 단독 실행이면 아무것도 하지 않는다
+  var skillId=qs.get('skill')||'';
+  var pend=null; try{ pend=JSON.parse(localStorage.getItem('mung-pending-skill')||'null'); }catch(e){}
+  if (pend && pend.id!==skillId) pend=null;
+  var name=(pend&&pend.name)||'훈련';
+
+  $('abTop').classList.add('on');
+  $('abName').innerHTML=name+'<small>손 신호로 멍이에게 말해 보세요</small>';
+
+  function grade(){
+    var t=0;
+    try{ var s=window.__MUNGX__&&window.__MUNGX__.sim&&window.__MUNGX__.sim(); if(s) t=s.trust||0; }catch(e){}
+    return { stars: t>=70?3 : t>=35?2 : 1, trust: Math.round(t) };
+  }
+  function finish(){
+    var g=grade();
+    $('abStars').textContent='★★★'.slice(0,g.stars)+'☆☆☆'.slice(0,3-g.stars);
+    $('abTitle').textContent=name+' 훈련 완료';
+    $('abSub').textContent= g.stars>=3 ? '멍이가 아주 편안해했어요. 완벽한 신호였습니다.'
+                          : g.stars===2 ? '잘했어요. 조금 더 천천히 다가가면 더 좋아질 거예요.'
+                          : '괜찮아요. 서두르지 않는 것부터 다시 연습해 볼까요.';
+    try{ localStorage.setItem('mung-skill-result',JSON.stringify(
+      {id:skillId,stars:g.stars,trust:g.trust,at:Date.now()})); }catch(e){}
+    try{ localStorage.removeItem('mung-pending-skill'); }catch(e){}
+    $('abEnd').classList.add('on');
+  }
+  function back(){ location.href='./app.html'; }
+
+  $('abDone').addEventListener('click',finish);
+  $('abGo').addEventListener('click',back);
+  $('abBack').addEventListener('click',function(){
+    // 중도 이탈은 결과를 남기지 않는다 (해금도 별도 안 됨)
+    try{ localStorage.removeItem('mung-pending-skill'); }catch(e){}
+    back();
+  });
+
+  // 미션이 스스로 끝나면 자동으로 완료 처리
+  setInterval(function(){
+    if ($('abEnd').classList.contains('on')) return;
+    try{
+      var s=window.__MUNGX__&&window.__MUNGX__.sim&&window.__MUNGX__.sim();
+      if (s && s.completed) finish();
+    }catch(e){}
+  },900);
+  window.__ABRIDGE__={finish:finish,grade:grade,skill:skillId};
 })();
 </script>
 </body>
