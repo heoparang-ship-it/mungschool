@@ -57,6 +57,20 @@ export function createDogView(canvas) {
   const tongueW = wrap(N['tongue'], 'mm-tongue');
   if (tongueW) tongueW.scale.setScalar(0.001);   // 기본은 숨김
 
+  /* ── 목줄 색 (상점 꾸미기) ──
+     스파이크 실측: collar:fill 재질은 다른 메시와 공유되지 않고, update() 가 색을 원복하지도 않는다.
+     그림자 오버레이(collar-authored-shadow)는 민트 전용 어두운 색이라 함께 물들여야 자연스럽다. */
+  const COLLARS = { mint: 0x2AB7A9, red: 0xE74C3C, yellow: 0xF3B13E, blue: 0x4A90D9 };
+  const collarFill = N['collar:fill'], collarSh = N['collar-authored-shadow:fill'];
+  if (collarFill && collarFill.material) collarFill.material = collarFill.material.clone();
+  if (collarSh && collarSh.material) collarSh.material = collarSh.material.clone();
+  function setCollar(key) {
+    const hex = COLLARS[key]; if (hex == null) return;
+    if (collarFill) collarFill.material.color.setHex(hex);
+    if (collarSh) collarSh.material.color.setHex(
+      ((hex >> 16 & 255) * 0.52 << 16) | ((hex >> 8 & 255) * 0.52 << 8) | ((hex & 255) * 0.52));
+  }
+
   const state = { stage: STAGES[0], pose: null, t: 0, ex: 1, yaw: 0.26 };
 
   /** 살짝 비스듬히 세운다. 정면 0°에서는 뒷다리가 앞다리에 완전히 가려 «두 발 달린 동물»로 읽힌다. */
@@ -136,6 +150,7 @@ export function createDogView(canvas) {
   return {
     setStage: applyStage,
     setYaw,
+    setCollar,
     stage: () => state.stage,
     /** pose: (t, ex) => ({state, ear, headTilt, ...}) · ex: 과장 계수 1→0 */
     play(pose, ex) { state.pose = pose; state.ex = (ex == null ? 1 : ex); state.t = 0; },

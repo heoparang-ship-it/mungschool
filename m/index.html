@@ -6,7 +6,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="description" content="실제 개 없이, 강아지의 신호를 읽는 법을 연습하는 앱">
 <meta name="theme-color" content="#3EC2A2">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐕</text></svg>">
+<link rel="icon" href="icon-192.png">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="멍스쿨">
 <style>
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   :root{
@@ -54,9 +59,12 @@
   .tab .dot{position:absolute;margin:-22px 0 0 20px;width:8px;height:8px;border-radius:50%;background:var(--coral);display:none}
   .tab.alert .dot{display:block}
 
-  /* ═══ 홈 ═══ */
+  /* ═══ 홈 ═══ 성장 단계마다 공간도 자란다: 방 → 마당 → 공원 */
   #room{position:absolute;left:0;right:0;top:0;height:66%;pointer-events:none;
         background:radial-gradient(120% 90% at 60% 20%,#E6F5EE 0%,#FFF6E8 70%,transparent 100%)}
+  #room[data-stage="teen"]{background:radial-gradient(120% 90% at 60% 20%,#DDF3E2 0%,#FFF3DC 70%,transparent 100%)}
+  #room[data-stage="adult"]{background:radial-gradient(120% 90% at 60% 18%,#D8EFF6 0%,#E9F6E2 70%,transparent 100%)}
+  .prop{position:absolute;font-size:26px;opacity:.85}
   #lvw{position:relative;z-index:3;margin:10px 14px 0}
   #lvb{height:9px;border-radius:6px;background:rgba(62,194,162,.18);overflow:hidden}
   #lvb i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,#6DD6BB,#1E8C74);
@@ -163,6 +171,35 @@
   .dc.lk{background:#F1F5F3;box-shadow:none}
   .dc.lk em{filter:grayscale(1);opacity:.32}
   .dc.lk b{color:#B3C4BD}
+
+  /* ═══ 상점 ═══ */
+  .shopHead{border-radius:18px;padding:16px;color:#fff;background:linear-gradient(135deg,#F0A968,#D9832B);
+            box-shadow:0 5px 0 #B2691E;display:flex;align-items:center;gap:12px}
+  .shopHead b{display:block;font-size:19px;font-weight:1000;letter-spacing:-.5px}
+  .shopHead small{display:block;font-size:12px;font-weight:700;opacity:.92;margin-top:2px}
+  .shopHead em{font-style:normal;font-size:36px;line-height:1;margin-left:auto}
+  .item{display:flex;align-items:center;gap:12px;background:#fff;border-radius:16px;padding:12px 14px;margin-top:9px;
+        box-shadow:0 3px 10px rgba(60,110,95,.09)}
+  .item em{font-style:normal;font-size:28px;width:40px;text-align:center}
+  .item .qi{flex:1;min-width:0}
+  .item b{display:block;font-size:14px;font-weight:900;letter-spacing:-.3px}
+  .item small{display:block;font-size:11px;color:var(--sub);font-weight:700;margin-top:1px}
+  .buy{border:0;border-radius:12px;min-height:40px;padding:0 13px;font-size:12.5px;font-weight:1000;
+       background:rgba(139,106,74,.12);color:#7A5A3C}
+  .buy.can{background:linear-gradient(140deg,#6DD6BB,#1E8C74);color:#fff;box-shadow:0 3px 0 #17715E}
+  .buy.on{background:rgba(62,194,162,.16);color:var(--mint-d)}
+  .item.tz{background:rgba(255,255,255,.6);border:1.5px dashed var(--line);box-shadow:none}
+  .item.tz em{filter:grayscale(.7);opacity:.7}
+  .swatch{width:16px;height:16px;border-radius:50%;display:inline-block;vertical-align:-2px;margin-right:4px;
+          box-shadow:inset 0 0 0 2px rgba(0,0,0,.12)}
+
+  /* 이름 입력 */
+  #nmIn{width:100%;border:2px solid var(--line);border-radius:14px;padding:12px 14px;font-size:17px;font-weight:800;
+        font-family:inherit;background:#fff;color:var(--ink);outline:none}
+  #nmIn:focus{border-color:var(--mint)}
+  #nmChips{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
+  #nmChips button{border:0;border-radius:999px;padding:8px 14px;background:rgba(62,194,162,.13);
+                  color:var(--mint-d);font-size:13px;font-weight:900}
 
   /* ═══ 훈련 ═══ */
   #train{background:linear-gradient(#F2F9F5,#FFF8EE)}
@@ -314,6 +351,17 @@
   <div id="dexGrid"></div>
 </div></div></section>
 
+<!-- ══ 상점 ══ -->
+<section class="scr tabbed" id="shop"><div class="sc"><div class="pad">
+  <div class="shopHead"><div><b>상점</b><small>훈련으로 모은 뼈다귀를 쓰는 곳</small></div><em>🛍️</em></div>
+  <div class="sect"><h3>에너지</h3></div>
+  <div id="shopEnergy"></div>
+  <div class="sect"><h3>목줄</h3><span>바로 착용돼요</span></div>
+  <div id="shopCollar"></div>
+  <div class="sect"><h3>준비 중 — 찜해 두면 먼저 만들어요</h3></div>
+  <div id="shopTease"></div>
+</div></div></section>
+
 <!-- ══ 훈련 ══ -->
 <section class="scr full" id="train">
   <div class="thead">
@@ -372,6 +420,35 @@
   <button class="shGo" id="dshGo">닫기</button>
 </div></div>
 
+<!-- 이름 짓기 시트 (첫 실행) -->
+<div class="sheet" id="nmsh"><div class="sheetc">
+  <div class="shTop"><span class="shIcon">🐶</span><span class="shTitle">새 친구가 왔어요!</span></div>
+  <div class="row"><b>이름을 지어 주세요</b>
+    <p style="margin-top:8px"><input id="nmIn" maxlength="8" placeholder="멍이" autocomplete="off"></p>
+    <div id="nmChips"><button>멍이</button><button>초코</button><button>보리</button><button>콩이</button></div>
+  </div>
+  <button class="shGo" id="nmGo">이 이름으로 시작</button>
+</div></div>
+
+<!-- 실전 카드 시트 (유닛 트로피 뒤) -->
+<div class="sheet" id="fcsh"><div class="sheetc">
+  <div class="shTop"><span class="shIcon">🎴</span><span class="shTitle">실전 카드</span>
+    <span class="shTier" style="background:rgba(255,180,84,.2);color:#B2691E">앱 밖 미션</span></div>
+  <div class="row todo"><b id="fcTitle">오늘의 미션</b><p id="fcBody"></p></div>
+  <div class="row"><b>왜 하나요</b><p>이 앱의 목적은 앱 밖에 있어요. 진짜 개에게서 신호를 찾는 순간, 배운 게 진짜가 됩니다.</p></div>
+  <button class="shGo" id="fcGo">해볼게요</button>
+</div></div>
+
+<!-- 정보 시트 -->
+<div class="sheet" id="ish"><div class="sheetc">
+  <div class="shTop"><span class="shIcon">🐕</span><span class="shTitle">멍스쿨</span></div>
+  <div class="row"><b>이 앱은</b><p id="ishAbout">실제 개 없이, 강아지가 보내는 신호를 읽는 법을 연습하는 앱이에요.</p></div>
+  <button class="shGo" id="muteBtn" style="background:#fff;color:#4a6d64;box-shadow:0 3px 10px rgba(60,110,95,.1)">🔊 소리 켜짐</button>
+  <button class="shGo" id="evExp" style="background:#fff;color:#4a6d64;box-shadow:0 3px 10px rgba(60,110,95,.1)">📤 학습 기록 내보내기</button>
+  <button class="shGo" id="rsBtn" style="background:#fff;color:#C0392B;box-shadow:0 3px 10px rgba(60,110,95,.1)">처음부터 다시 시작</button>
+  <button class="shGo" id="ishGo">닫기</button>
+</div></div>
+
 <!-- ⚡에너지 시트 -->
 <div class="sheet" id="ensh"><div class="sheetc">
   <div class="shTop"><span class="shIcon">⚡</span><span class="shTitle">에너지가 다 떨어졌어요</span>
@@ -384,10 +461,11 @@
 
 <!-- ══ 하단 탭바 ══ -->
 <div id="tabs"><div id="tabsIn">
-  <button class="tab on" data-go="home"><em>🐕</em>멍이</button>
+  <button class="tab on" data-go="home"><em>🐕</em><span class="tname">멍이</span></button>
   <button class="tab" data-go="path"><em>🐾</em>산책<span class="dot"></span></button>
   <button class="tab" data-go="quest"><em>🎯</em>퀘스트<span class="dot"></span></button>
   <button class="tab" data-go="dex"><em>📖</em>도감</button>
+  <button class="tab" data-go="shop"><em>🛍️</em>상점</button>
 </div></div>
 
 <div id="toast"></div>
@@ -413,8 +491,42 @@ const KEY = 'mungschool-mobile-v1';
 /* ⚡에너지는 «사람의 것»이다. 멍이는 지치지 않는다 — 지치는 건 훈련하는 사람이고,
    시간이 지나면 돌아오며, 뼈다귀로 바로 채울 수 있다. (마찰이 곧 수익 모델의 입구) */
 const EN_MAX = 5, EN_MS = 30*60*1000, EN_REFILL_BONE = 30;
-const DEF = { v:3, bond:0, xp:0, bones:0, en:EN_MAX, enT:0, done:[], learned:[], miss:{}, streak:0, lastDay:'',
-              sessions:0, best:0, rounds:0, q:{day:'',lessons:0,right:0,xp:0,claimed:[]} };
+const DEF = { v:4, bond:0, xp:0, bones:0, en:EN_MAX, enT:0, done:[], learned:[], miss:{}, streak:0, lastDay:'',
+              sessions:0, best:0, rounds:0, name:'멍이', named:false, mute:false,
+              collar:'mint', owned:['mint'], wish:{},
+              q:{day:'',lessons:0,right:0,xp:0,claimed:[]} };
+
+/* ═══ 분석 이벤트 ═══ 배포 후 정부지원 서류에 쓸 리텐션 숫자는 지금부터 쌓아야 한다 */
+const EVK = 'mungschool-mobile-ev';
+let EV = []; try{ EV = JSON.parse(localStorage.getItem(EVK)||'[]') }catch(e){}
+const track = (e,d) => { EV.push({t:Date.now(),e,d:d==null?null:d});
+  if(EV.length>2000) EV=EV.slice(-2000);
+  try{ localStorage.setItem(EVK, JSON.stringify(EV)) }catch(x){} };
+
+/* ═══ 한국어 조사 ═══ 이름이 자유 입력이라 은/는·이/가·을/를·아/야를 받침으로 가른다 */
+const jong = s => { const c=s.charCodeAt(s.length-1); return c>=0xAC00&&c<=0xD7A3 ? ((c-0xAC00)%28)>0 : false; };
+const J = (s,a,b) => s + (jong(s)?a:b);   // J(이름,'은','는') / J(이름,'이','가') / J(이름,'아','야')
+
+/* ═══ 소리·진동 ═══ WebAudio 신디사이즈 — 에셋 0개. 첫 터치에서 unlock */
+let AC=null;
+const ac = () => AC || (AC = new (window.AudioContext||window.webkitAudioContext)());
+function tone(f, at, dur, type='sine', vol=0.10){
+  if(G.mute) return;
+  try{
+    const c=ac(), t=c.currentTime+at, o=c.createOscillator(), g=c.createGain();
+    o.type=type; o.frequency.setValueAtTime(f,t);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol,t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g).connect(c.destination); o.start(t); o.stop(t+dur+0.05);
+  }catch(e){}
+}
+const sndOk     = () => { tone(660,0,.09); tone(880,.08,.16); };
+const sndNo     = () => { tone(233,0,.16,'triangle',.07); };
+const sndChest  = () => { [523,659,784,1047].forEach((f,i)=>tone(f,i*.07,.12)); };
+const sndTrophy = () => { [523,523,784].forEach((f,i)=>tone(f,i*.14,i===2?.5:.13)); tone(1047,.44,.4,'sine',.08); };
+const vib = p => { try{ navigator.vibrate && navigator.vibrate(p) }catch(e){} };
+addEventListener('pointerdown', () => { try{ ac().resume() }catch(e){} }, { once:true, capture:true });
 let G = {};
 const today = () => { const d=new Date(); return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`; };
 function load(){
@@ -428,6 +540,10 @@ function load(){
   if(!Array.isArray(G.q.claimed)) G.q.claimed=[];
   if(typeof G.en!=='number' || G.en<0 || G.en>EN_MAX) G.en=EN_MAX;   // v2 이하 저장분 이행
   if(typeof G.enT!=='number' || !G.enT) G.enT=Date.now();
+  if(typeof G.name!=='string' || !G.name.trim()) G.name='멍이';
+  if(!Array.isArray(G.owned) || !G.owned.length) G.owned=['mint'];
+  if(!G.owned.includes(G.collar)) G.collar='mint';
+  if(typeof G.wish!=='object' || !G.wish) G.wish={};
   rollQuests();
 }
 const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(G)) }catch(e){} };
@@ -463,7 +579,7 @@ function rollQuests(){
 }
 
 /* ═══ 화면 전환 ═══ */
-const TABBED = ['home','path','quest','dex'];
+const TABBED = ['home','path','quest','dex','shop'];
 let cur = 'home';
 function show(id){
   cur = id;
@@ -480,6 +596,7 @@ function show(id){
       if(t) t.scrollIntoView({block:'center'}); }); }
   if(id==='quest') paintQuests();
   if(id==='dex') paintDex();
+  if(id==='shop'){ paintShop(); track('store_view'); }
 }
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>show(t.dataset.go));
 
@@ -504,6 +621,7 @@ function paintTop(pop){
 }
 
 /* ═══ 홈 ═══ */
+const PROPS = { pup:['🧸','🪴'], teen:['🌷','🪵'], adult:['🌳','🌼'] };
 function paintHome(){
   const st = stageFor(G.learned.length);
   const idx = STAGES.indexOf(st);
@@ -511,9 +629,15 @@ function paintHome(){
   const into = Math.min(G.learned.length - from, need - from);
   $('lvFill').style.width = Math.max(0, Math.min(100, into/(need-from)*100)) + '%';
   const rel = G.bond<20?'낯선 사이':G.bond<45?'조금 익숙':G.bond<80?'편안해짐':'단짝';
-  $('lvL').textContent = `${st.name} · ${rel}`;
+  $('lvL').textContent = `${G.name} · ${st.name} · ${rel}`;
   $('lvR').textContent = `${G.learned.length} / ${need}`;
-  if (homeDog) homeDog.setStage(st);
+  document.querySelector('.tab[data-go="home"] .tname').textContent = G.name;
+  // 성장 단계마다 공간도 자란다: 방 → 마당 → 공원
+  const room=$('room'); room.dataset.stage = st.key;
+  const pr = PROPS[st.key] || PROPS.pup;
+  room.innerHTML = `<span class="prop" style="left:7%;bottom:10%">${pr[0]}</span>
+                    <span class="prop" style="right:7%;bottom:8%;font-size:31px">${pr[1]}</span>`;
+  if (homeDog){ homeDog.setStage(st); homeDog.setCollar(G.collar); }
   // 홈의 큰 버튼은 «지금 해야 할 노드»로 바로 데려간다
   enRegen();
   const i = currentIndex(G.done);
@@ -602,6 +726,13 @@ function paintPath(){
   document.querySelector('.tab[data-go="path"]').classList.toggle('alert', ci < PATH.length);
 }
 
+/* 유닛 트로피 뒤 실전 카드 — 앱의 목적은 앱 밖에 있다 */
+const MISSIONS = {
+  u1: '오늘 지나가는 개 한 마리를 «멀리서» 지켜보며, 편안함·관심·기쁨 중 1개를 찾아보세요.',
+  u2: '산책 중인 개가 입술을 핥거나 시선을 돌리는 순간을 1번 찾아보세요. 다가가지 말고 관찰만!',
+  u3: '귀가 뒤로 눕거나 몸이 낮아진 개를 보면, 그 개가 «무엇 때문에» 불안한지 주변을 함께 봐 주세요.',
+  u4: '이 유닛의 신호는 «찾는» 게 아니라 «기억하는» 거예요. 보이는 즉시 멀어지기 — 그게 미션의 전부예요.',
+};
 function enterNode(n){
   if(n.type === 'lesson'){
     if(!enSpend()) return openEnergy();       // ⚡는 사람 몫 — 멍이는 항상 준비되어 있다
@@ -609,9 +740,18 @@ function enterNode(n){
   }
   // 상자·트로피는 즉시 보상 (에너지를 쓰지 않는다)
   G.done.push(n.id); G.bones += n.reward; save();
+  track(n.type, {unit:n.unit.key, bone:n.reward});
+  if(n.type==='chest'){ sndChest(); vib(30); }
+  else { sndTrophy(); vib([40,60,40]); }
   paintTop(['Bone']); paintPath(); paintHome();
   toast(`${n.type==='chest'?'보물상자':'유닛 완료'} · +${n.reward} 🦴`);
+  if(n.type==='trophy'){
+    $('fcTitle').textContent = `${n.unit.title} — 오늘의 실전 미션`;
+    $('fcBody').textContent = MISSIONS[n.unit.key] || '';
+    setTimeout(()=>$('fcsh').classList.add('on'), 550);
+  }
 }
+$('fcGo').onclick = ()=>{ $('fcsh').classList.remove('on'); track('field_card_ok'); };
 
 /* ═══ 퀘스트 ═══ */
 function paintQuests(){
@@ -630,7 +770,8 @@ function paintQuests(){
     el.querySelector('.chest').onclick = ()=>{
       if(got) return toast('이미 받았어요');
       if(!ready) return toast(`아직 ${q.goal-have}개 남았어요`);
-      G.q.claimed.push(q.id); G.bones += q.bone; save();
+      G.q.claimed.push(q.id); G.bones += q.bone; save(); track('quest_claim',{id:q.id});
+      sndChest(); vib(25);
       paintTop(['Bone']); paintQuests(); toast(`퀘스트 완료 · +${q.bone} 🦴`);
     };
     box.appendChild(el);
@@ -668,9 +809,72 @@ function openDex(s){
 }
 $('dshGo').onclick = ()=>$('dsh').classList.remove('on');
 
+/* ═══ 상점 ═══ 🦴의 사용처. 잠긴 진열대는 그 자체로 과금 수요 조사다 */
+const COLLAR_ITEMS = [
+  { id:'mint',   name:'민트 목줄', cost:0,  hex:'#2AB7A9' },
+  { id:'red',    name:'빨간 목줄', cost:80, hex:'#E74C3C' },
+  { id:'yellow', name:'노랑 목줄', cost:80, hex:'#F3B13E' },
+  { id:'blue',   name:'파랑 목줄', cost:80, hex:'#4A90D9' },
+];
+const TEASE_ITEMS = [
+  { id:'raincoat', emoji:'🧥', name:'노란 우비',      cost:200 },
+  { id:'hat',      emoji:'🎩', name:'젠틀 모자',      cost:150 },
+  { id:'beagle',   emoji:'🐶', name:'비글 팩',        cost:400 },
+  { id:'corgi',    emoji:'🐕', name:'웰시코기 팩',    cost:400 },
+  { id:'frenchie', emoji:'🐾', name:'프렌치불독 팩',  cost:400 },
+];
+function paintShop(){
+  // ⚡ 충전
+  const e = $('shopEnergy'); enRegen();
+  e.innerHTML = `<div class="item"><em>⚡</em><div class="qi"><b>에너지 가득 채우기</b>
+      <small>지금 ${G.en} / ${EN_MAX} · 30분마다 1씩 돌아와요</small></div>
+      <button class="buy ${G.bones>=EN_REFILL_BONE&&G.en<EN_MAX?'can':''}" id="shopRefill">🦴 ${EN_REFILL_BONE}</button></div>`;
+  $('shopRefill').onclick = ()=>{
+    enRegen();
+    if(G.en>=EN_MAX) return toast('에너지가 이미 가득해요');
+    if(G.bones<EN_REFILL_BONE) return toast('뼈다귀가 부족해요');
+    G.bones-=EN_REFILL_BONE; G.en=EN_MAX; G.enT=Date.now(); save(); track('refill',{from:'shop'});
+    sndChest(); paintTop(['Energy','Bone']); paintShop(); toast('에너지를 가득 채웠어요 ⚡');
+  };
+  // 목줄 — 실제로 착용된다
+  const c = $('shopCollar'); c.innerHTML='';
+  COLLAR_ITEMS.forEach(it=>{
+    const owned = G.owned.includes(it.id), on = G.collar===it.id;
+    const el=document.createElement('div'); el.className='item';
+    el.innerHTML = `<em><span class="swatch" style="background:${it.hex}"></span></em>
+      <div class="qi"><b>${it.name}</b><small>${on?'착용 중':owned?'보유 중':'바로 착용돼요'}</small></div>
+      <button class="buy ${on?'on':owned||G.bones>=it.cost?'can':''}">${on?'착용 중':owned?'착용':'🦴 '+it.cost}</button>`;
+    el.querySelector('.buy').onclick = ()=>{
+      if(on) return;
+      if(!owned){
+        if(G.bones<it.cost) return toast('뼈다귀가 부족해요');
+        G.bones-=it.cost; G.owned.push(it.id); track('buy',{item:it.id,cost:it.cost}); sndChest(); vib(25);
+      }
+      G.collar=it.id; save();
+      homeDog && homeDog.setCollar(it.id); trainDog && trainDog.setCollar(it.id);
+      paintTop(['Bone']); paintShop(); toast(`${it.name}${jong(it.name)?'을':'를'} 착용했어요`);
+    };
+    c.appendChild(el);
+  });
+  // 준비 중 — 찜
+  const t = $('shopTease'); t.innerHTML='';
+  TEASE_ITEMS.forEach(it=>{
+    const n = G.wish[it.id]||0;
+    const el=document.createElement('div'); el.className='item tz';
+    el.innerHTML = `<em>${it.emoji}</em><div class="qi"><b>${it.name}</b><small>준비 중 · 예상 🦴 ${it.cost}</small></div>
+      <button class="buy">💗 찜${n?` ${n}`:''}</button>`;
+    el.querySelector('.buy').onclick = ()=>{
+      G.wish[it.id]=(G.wish[it.id]||0)+1; save(); track('wish',{item:it.id});
+      paintShop(); toast('찜했어요! 먼저 만들게요');
+    };
+    t.appendChild(el);
+  });
+}
+
 /* ═══ ⚡에너지 시트 ═══ */
 function openEnergy(){
   enRegen();
+  document.querySelector('#ensh .row b').textContent = `${J(G.name,'은','는')} 지치지 않아요`;
   $('enCnt').textContent = `${G.en} / ${EN_MAX}`;
   $('enTimer').textContent = G.en>=EN_MAX ? '가득 찼어요' : `약 ${enMins()}분 뒤 ⚡1 회복`;
   const r=$('enRefill');
@@ -691,7 +895,7 @@ $('enRefill').onclick = ()=>{
 
 /* ═══ 훈련 로직 ═══ */
 const ROUND = 5;
-let round = null;
+let round = null, lastFx = '';   // lastFx = QA 훅: 마지막 강아지 리액션
 
 function pickQuestions(node){
   const pool = (node ? poolFor(node, G.done) : SIGNALS.map(s=>s.id)).map(byId).filter(Boolean);
@@ -702,13 +906,19 @@ function pickQuestions(node){
   for(let i=0;i<ROUND;i++) out.push(rank[i % rank.length]);
   return out.sort(()=>Math.random()-.5);
 }
-function optionsFor(sig){
-  const others = SIGNALS.filter(s=>s.id!==sig.id).sort(()=>Math.random()-.5).slice(0,2);
-  return [sig,...others].sort(()=>Math.random()-.5);
+/* ★선택지가 난이도 사다리를 무너뜨리면 안 된다.
+   유닛 1: 이모지 힌트 허용(입문) · 유닛 2~3: 이모지 제거 · 유닛 4·복습: 4지선다까지 */
+function optionsFor(sig, node){
+  const ui = node ? node.ui : 3;                 // 복습은 최고 난이도로 취급
+  const count = ui>=3 ? 4 : 3;
+  const noEmoji = ui>=1;
+  const others = SIGNALS.filter(s=>s.id!==sig.id).sort(()=>Math.random()-.5).slice(0,count-1);
+  return { list:[sig,...others].sort(()=>Math.random()-.5), noEmoji };
 }
 
 function startRound(node){
   const n = node || null;
+  track('lesson_start', {node: n? n.id : 'review'});
   round = { node:n, depth: n && n.depth!=null ? n.depth : 1,
             qs: pickQuestions(n), i:0, right:0, streak:0, best:0, missed:[], xp:0 };
   $('tUnit').textContent = n ? `${n.unit.no} · ${n.unit.title}` : '복습';
@@ -727,13 +937,15 @@ function nextQ(){
     : `과장 ${Math.round(ex*100)}% · 실제 개에 가까워요`;
   $('combo').classList.toggle('on', round.streak>=2);
   $('combo').textContent = `🔥 연속 ${round.streak}`;
+  $('ask').textContent = `지금 ${J(G.name,'은','는')} 어떤 상태일까요?`;
   trainDog && trainDog.play(sig.pose, ex);
-  const opts = optionsFor(sig);
+  const { list, noEmoji } = optionsFor(sig, round.node);
   const box = $('opts'); box.innerHTML='';
-  opts.forEach(o=>{
+  list.forEach(o=>{
     const b = document.createElement('button');
-    b.className='opt'; b.innerHTML = `<em>${o.emoji}</em><span>${o.name}</span>`;
-    b.onclick = ()=>answer(b, o, sig, opts);
+    b.className='opt';
+    b.innerHTML = noEmoji ? `<em>🐾</em><span>${o.name}</span>` : `<em>${o.emoji}</em><span>${o.name}</span>`;
+    b.onclick = ()=>answer(b, o, sig, list);
     box.appendChild(b);
   });
 }
@@ -743,6 +955,9 @@ function answer(btn, chosen, sig, opts){
   const ok = chosen.id === sig.id;
   btn.classList.remove('dim'); btn.classList.add(ok?'right':'wrong');
   if(!ok){ const ri=opts.indexOf(sig); if(box.children[ri]){ box.children[ri].classList.remove('dim'); box.children[ri].classList.add('right'); } }
+  /* ★정답의 첫 보상은 숫자가 아니라 «강아지의 반응»이다 (리뷰 격차 ①) */
+  if(ok){ trainDog && trainDog.play(byId('joy').pose, 1); sndOk(); vib(20); lastFx='joy'; }
+  else  { trainDog && trainDog.play(byId('curious').pose, 1); sndNo(); vib([25,40,25]); lastFx='huh'; }
   let gained = 0;
   if(ok){
     round.right++; round.streak++; round.best=Math.max(round.best,round.streak);
@@ -753,8 +968,9 @@ function answer(btn, chosen, sig, opts){
   } else {
     round.streak=0; round.missed.push(sig); G.miss[sig.id]=(G.miss[sig.id]||0)+1;
   }
+  track('answer', {sig:sig.id, ok});
   save();
-  setTimeout(()=>openFb(ok, sig, gained), 500);
+  setTimeout(()=>openFb(ok, sig, gained), 620);   // 리액션을 잠깐 보여 준 뒤 시트를 연다
 }
 function openFb(ok, sig, gained){
   const t = tierOf(sig.tier);
@@ -797,7 +1013,7 @@ function finish(){
   $('rEmo').textContent = rate===100?'🎉':rate>=60?'🐕':'🐶';
   $('rTitle').textContent = rate===100?'완벽했어요!':rate>=60?'잘하고 있어요':'천천히 다시 해볼까요';
   $('rSub').textContent = rate===100
-    ? ('멍이의 신호를 전부 읽어냈어요' + (refunded?' · ⚡1 돌려받았어요':''))
+    ? (`${G.name}의 신호를 전부 읽어냈어요` + (refunded?' · ⚡1 돌려받았어요':''))
     : `${ROUND}개 중 ${round.right}개를 읽어냈어요`;
   $('scRight').textContent = round.right;
   $('scRate').textContent = rate+'%';
@@ -807,9 +1023,12 @@ function finish(){
 
   const g=$('grew');
   if(after!==before){ g.classList.add('on');
-    g.querySelector('b').textContent = `멍이가 자랐어요 — ${after.name}`;
+    g.querySelector('b').textContent = `${J(G.name,'이','가')} 자랐어요 — ${after.name}`;
     g.querySelector('small').textContent = `${before.ratio}등신 → ${after.ratio}등신`;
+    sndTrophy();
   } else g.classList.remove('on');
+  if(rate===100 && after===before) sndChest();
+  track('lesson_done', {rate, xp, node: round.node? round.node.id : 'review'});
 
   const mw=$('missWrap');
   // 한 판에 같은 신호가 두 번 나올 수 있다 — 목록에 중복으로 쌓지 않는다
@@ -823,6 +1042,7 @@ function finish(){
   }
   const nxt = PATH[currentIndex(G.done)];
   $('rAgain').textContent = nxt ? '다음 산책으로' : '복습 산책 한 바퀴';
+  $('rHome').textContent = `${G.name}에게 돌아가기`;
   show('res'); paintHome(); paintTop(bone?['Xp','Bone','Bond']:['Xp','Bond']);
 }
 
@@ -836,7 +1056,47 @@ $('tBack').onclick = ()=>{ trainDog && trainDog.idle(); show('path'); };
 $('rAgain').onclick = goCurrent;
 $('rHome').onclick = ()=>{ show('home');
   say(G.learned.length>=8?'많이 배웠구나!':G.learned.length>=4?'점점 잘 읽네!':'또 만나서 반가워!'); };
-$('btnAbout').onclick = ()=>toast('실제 개 없이, 강아지가 보내는 신호를 읽는 연습을 하는 앱이에요');
+
+/* ═══ 정보 시트 ═══ */
+function paintInfo(){
+  $('ishAbout').textContent = `실제 개 없이, ${J(G.name,'이','가')} 보내는 신호를 읽는 법을 연습하는 앱이에요. 배운 건 밖에서 진짜 개에게 확인해 보세요.`;
+  $('muteBtn').textContent = G.mute ? '🔇 소리 꺼짐' : '🔊 소리 켜짐';
+}
+$('btnAbout').onclick = ()=>{ paintInfo(); $('ish').classList.add('on'); };
+$('ishGo').onclick = ()=>$('ish').classList.remove('on');
+$('muteBtn').onclick = ()=>{ G.mute=!G.mute; save(); paintInfo(); if(!G.mute) sndOk(); };
+$('evExp').onclick = ()=>{
+  try{
+    const blob = new Blob([JSON.stringify({exported:Date.now(), state:G, events:EV},null,1)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'mungschool-log.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    toast('학습 기록을 내보냈어요');
+  }catch(e){ toast('내보내기에 실패했어요'); }
+};
+let rsArm = 0;   // confirm() 은 브라우저를 얼린다 — 두 번 누르기로 대신한다
+$('rsBtn').onclick = ()=>{
+  const now = Date.now();
+  if(now - rsArm > 3000){ rsArm = now; return toast('정말 지우려면 3초 안에 한 번 더 누르세요'); }
+  try{ localStorage.removeItem(KEY); localStorage.removeItem(EVK); }catch(e){}
+  location.reload();
+};
+
+/* ═══ 이름 짓기 (첫 실행) ═══ */
+function openNaming(){
+  $('nmIn').value = '';
+  $('nmsh').classList.add('on');
+}
+document.querySelectorAll('#nmChips button').forEach(b=>{
+  b.onclick = ()=>{ $('nmIn').value = b.textContent; };
+});
+$('nmGo').onclick = ()=>{
+  const v = ($('nmIn').value||'').trim().slice(0,8);
+  G.name = v || '멍이'; G.named = true; save(); track('name_set',{name:G.name});
+  $('nmsh').classList.remove('on');
+  paintHome(); sndOk();
+  say(`${J(G.name,'아','야')}, 우리 시작해 볼까?`, 3200);
+};
 addEventListener('pagehide', save);
 
 /* ═══ 부팅 ═══ */
@@ -848,6 +1108,7 @@ try{
   const mkDog = id => { try { return createDogView($(id)); } catch (e) { return null; } };
   homeDog = mkDog('homeCv');
   trainDog = mkDog('trainCv');
+  trainDog && trainDog.setCollar(G.collar);
   paintHome(); paintTop();
   show('home');
   $('boot').classList.add('off');
@@ -855,8 +1116,10 @@ try{
     $('btnTrain').disabled = true; $('btnTrain').style.opacity = .5;
     setTimeout(()=>say('이 기기에서는 3D를 켤 수 없어요. 다른 브라우저에서 열어 주세요', 6000), 300);
   }
+  track('boot', {rounds:G.rounds, learned:G.learned.length});
   const d=today();
-  setTimeout(()=>{
+  if(!G.named){ setTimeout(openNaming, 600); }   // 첫 실행: 이름부터. «내 개»가 되는 순간
+  else setTimeout(()=>{
     if(G.rounds===0) say('처음 만나서 반가워!', 3400);
     else if(G.lastDay===d) say('오늘도 왔구나!');
     else say('기다리고 있었어!');
@@ -871,8 +1134,10 @@ try{
         if(p.type==='lesson' && !G.learned.includes(p.sig)) G.learned.push(p.sig); }
       save(); paintHome(); paintPath(); },
     give:o=>{ Object.assign(G,o); save(); paintTop(); if(cur==='home') paintHome(); },
+    fx:()=>lastFx, ev:()=>EV,
   };
   setInterval(()=>{ if(enRegen()){ paintTop(['Energy']); if(cur==='home') paintHome(); } }, 15000);
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
 }catch(e){
   fail('불러오지 못했습니다: ' + (e && e.message ? e.message : e));
 }
