@@ -290,7 +290,7 @@ function nextQ(){
   $('exBadge').textContent = ex>0.75 ? '과장 100% · 크게 보여 줍니다'
     : ex>0.45 ? `과장 ${Math.round(ex*100)}% · 조금 작아졌어요`
     : `과장 ${Math.round(ex*100)}% · 실제 개에 가까워요`;
-  trainDog.play(sig.pose, ex);
+  trainDog && trainDog.play(sig.pose, ex);
   const opts = optionsFor(sig);
   const box = $('opts'); box.innerHTML='';
   opts.forEach(o=>{
@@ -374,10 +374,18 @@ $('btnAbout').onclick = ()=>toast('실제 개 없이, 강아지가 보내는 신
 try{
   load();
   boot('멍이를 그리는 중…');
-  homeDog = createDogView($('homeCv'));
-  trainDog = createDogView($('trainCv'));
+  /* 3D 는 «있으면 좋은 것»이 아니라 이 앱의 본체다. 다만 WebGL 이 막힌 기기(구형·저전력·잠금 모드)에서
+     날것의 예외 문자열을 띄우고 죽어 버리면 안 된다. 실패해도 앱은 뜨고, 왜 안 되는지 사람 말로 알려 준다. */
+  const mkDog = id => { try { return createDogView($(id)); } catch (e) { return null; } };
+  homeDog = mkDog('homeCv');
+  trainDog = mkDog('trainCv');
   paintHome();
   $('boot').classList.add('off');
+  if (!homeDog || !trainDog) {
+    $('btnTrain').disabled = true;
+    $('btnTrain').style.opacity = .5;
+    setTimeout(()=>say('이 기기에서는 3D를 켤 수 없어요. 다른 브라우저에서 열어 주세요', 6000), 300);
+  }
   const d=today();
   setTimeout(()=>{
     if(G.rounds===0) say('처음 만나서 반가워!', 3400);
