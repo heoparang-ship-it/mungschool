@@ -33,9 +33,10 @@
        border-bottom:1px solid var(--line)}
   #top.on{display:block}
   #topIn{height:var(--topH);display:flex;align-items:center;justify-content:space-around;padding:0 8px}
-  .res{display:flex;align-items:center;gap:5px;font-size:14.5px;font-weight:1000;letter-spacing:-.3px}
-  .res em{font-style:normal;font-size:17px;line-height:1}
+  .res{display:flex;align-items:center;gap:4px;font-size:13.5px;font-weight:1000;letter-spacing:-.3px}
+  .res em{font-style:normal;font-size:16px;line-height:1}
   .res.fire{color:var(--amber-d)} .res.xp{color:#E0A21A} .res.bone{color:#8B6A4A} .res.bond{color:var(--coral)}
+  .res.en{color:var(--violet)}
   .res.pop{animation:pop .5s cubic-bezier(.2,1.4,.4,1)}
   @keyframes pop{0%{transform:none}35%{transform:scale(1.3)}100%{transform:none}}
 
@@ -84,8 +85,8 @@
   /* ═══ 훈련 길 ═══ */
   .sc{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
   .pad{padding:12px 16px 26px;max-width:520px;margin:0 auto;width:100%}
-  /* 유닛 배너는 스크롤에 붙어 «지금 어느 유닛인지»를 계속 알려 준다 */
-  .ubanner{position:sticky;top:0;z-index:5;border-radius:18px;padding:13px 16px;margin:14px 0 4px;color:#fff;
+  /* 유닛 배너 = 산책길 각 구간의 입구 이정표. 아래에서 위로 오르므로 구간의 아래쪽에 놓인다 */
+  .ubanner{position:relative;border-radius:18px;padding:13px 16px;margin:14px 0 4px;color:#fff;
            background:var(--c);box-shadow:0 5px 0 var(--cd);display:flex;align-items:center;gap:10px}
   .ubanner small{display:block;font-size:11px;font-weight:800;opacity:.85}
   .ubanner b{display:block;font-size:17px;font-weight:1000;letter-spacing:-.4px}
@@ -94,6 +95,8 @@
   .ubanner.lockU{background:#DCE6E1;color:#8FA69E;box-shadow:0 5px 0 #C6D5CE}
   .uhint{font-size:11.5px;font-weight:700;color:var(--sub);text-align:center;margin:9px 0 2px}
   .nodeRow{display:flex;justify-content:center;margin:9px 0;position:relative}
+  .paws{position:relative;height:24px;margin:1px 0;pointer-events:none}
+  .paws span{position:absolute;left:50%;top:0;font-size:12px;opacity:.42}
   .nodeWrap{position:relative;transform:translateX(var(--dx))}
   .node{width:68px;height:62px;border:0;border-radius:50%/54%;position:relative;z-index:2;
         background:var(--nc);box-shadow:0 6px 0 var(--nd);color:#fff;font-size:27px;line-height:1;
@@ -271,6 +274,7 @@
   <div class="res xp"   id="rsXp"><em>⭐</em><span id="cXp">0</span></div>
   <div class="res bone" id="rsBone"><em>🦴</em><span id="cBone">0</span></div>
   <div class="res bond" id="rsBond"><em>💛</em><span id="cBond">0</span></div>
+  <div class="res en"   id="rsEnergy"><em>⚡</em><span id="cEnergy">5</span></div>
 </div></div>
 
 <!-- ══ 홈 ══ -->
@@ -368,10 +372,20 @@
   <button class="shGo" id="dshGo">닫기</button>
 </div></div>
 
+<!-- ⚡에너지 시트 -->
+<div class="sheet" id="ensh"><div class="sheetc">
+  <div class="shTop"><span class="shIcon">⚡</span><span class="shTitle">에너지가 다 떨어졌어요</span>
+    <span class="shTier" id="enCnt" style="background:#EFEBFA;color:#7C63C0">0 / 5</span></div>
+  <div class="row"><b>멍이는 지치지 않아요</b><p>지치는 건 사람이에요. 훈련 한 번에 ⚡1을 쓰고, 30분마다 1씩 돌아와요. 만점을 받으면 ⚡1을 돌려드려요.</p></div>
+  <div class="row todo"><b>다음 에너지까지</b><p id="enTimer">–</p></div>
+  <button class="shGo" id="enRefill">🦴 30으로 지금 가득 채우기</button>
+  <button class="shGo" id="enClose" style="background:#fff;color:#4a6d64;box-shadow:0 3px 10px rgba(60,110,95,.1)">기다릴게요</button>
+</div></div>
+
 <!-- ══ 하단 탭바 ══ -->
 <div id="tabs"><div id="tabsIn">
   <button class="tab on" data-go="home"><em>🐕</em>멍이</button>
-  <button class="tab" data-go="path"><em>🐾</em>훈련<span class="dot"></span></button>
+  <button class="tab" data-go="path"><em>🐾</em>산책<span class="dot"></span></button>
   <button class="tab" data-go="quest"><em>🎯</em>퀘스트<span class="dot"></span></button>
   <button class="tab" data-go="dex"><em>📖</em>도감</button>
 </div></div>
@@ -396,7 +410,10 @@ const shade = (hex,f) => { const n=parseInt(hex.slice(1),16);
 
 /* ═══ 저장 상태 ═══ */
 const KEY = 'mungschool-mobile-v1';
-const DEF = { v:2, bond:0, xp:0, bones:0, done:[], learned:[], miss:{}, streak:0, lastDay:'',
+/* ⚡에너지는 «사람의 것»이다. 멍이는 지치지 않는다 — 지치는 건 훈련하는 사람이고,
+   시간이 지나면 돌아오며, 뼈다귀로 바로 채울 수 있다. (마찰이 곧 수익 모델의 입구) */
+const EN_MAX = 5, EN_MS = 30*60*1000, EN_REFILL_BONE = 30;
+const DEF = { v:3, bond:0, xp:0, bones:0, en:EN_MAX, enT:0, done:[], learned:[], miss:{}, streak:0, lastDay:'',
               sessions:0, best:0, rounds:0, q:{day:'',lessons:0,right:0,xp:0,claimed:[]} };
 let G = {};
 const today = () => { const d=new Date(); return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`; };
@@ -409,9 +426,36 @@ function load(){
   if(typeof G.miss!=='object'||!G.miss) G.miss={};
   if(typeof G.q!=='object'||!G.q) G.q=JSON.parse(JSON.stringify(DEF.q));
   if(!Array.isArray(G.q.claimed)) G.q.claimed=[];
+  if(typeof G.en!=='number' || G.en<0 || G.en>EN_MAX) G.en=EN_MAX;   // v2 이하 저장분 이행
+  if(typeof G.enT!=='number' || !G.enT) G.enT=Date.now();
   rollQuests();
 }
 const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(G)) }catch(e){} };
+
+/* ═══ ⚡에너지 ═══ 가득에서 처음 쓰는 순간부터 회복 시계가 돈다 */
+function enRegen(){
+  const now = Date.now();
+  if(G.en >= EN_MAX){ G.enT = now; return false; }
+  const gain = Math.floor((now - G.enT) / EN_MS);
+  if(gain > 0){ G.en = Math.min(EN_MAX, G.en + gain);
+    G.enT = G.en >= EN_MAX ? now : G.enT + gain*EN_MS; save(); return true; }
+  return false;
+}
+function enSpend(){
+  enRegen();
+  if(G.en <= 0) return false;
+  if(G.en === EN_MAX) G.enT = Date.now();
+  G.en--; save(); paintTop(['Energy']);
+  return true;
+}
+function enRefund(){
+  enRegen();
+  if(G.en >= EN_MAX) return false;
+  G.en++; if(G.en >= EN_MAX) G.enT = Date.now();
+  save(); paintTop(['Energy']);
+  return true;
+}
+const enMins = () => G.en>=EN_MAX ? 0 : Math.max(1, Math.ceil((G.enT + EN_MS - Date.now())/60000));
 /** 하루가 바뀌면 오늘의 퀘스트를 새로 깐다 */
 function rollQuests(){
   const d = today();
@@ -428,9 +472,12 @@ function show(id){
   $('top').classList.toggle('on', tabbed);
   $('tabs').classList.toggle('on', tabbed);
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.go===id));
-  if(id==='home') homeDog && homeDog.refit();
+  if(id==='home'){ paintHome(); homeDog && homeDog.refit(); }   // 돌아올 때마다 새로 그린다 — 낡은 라벨 금지
   if(id==='train') trainDog && trainDog.refit();
-  if(id==='path') paintPath();
+  if(id==='path'){ paintPath();
+    requestAnimationFrame(()=>{ const t=document.querySelector('#path .startCard')
+      || document.querySelector('#path .halo') || document.querySelector('#pathDone');
+      if(t) t.scrollIntoView({block:'center'}); }); }
   if(id==='quest') paintQuests();
   if(id==='dex') paintDex();
 }
@@ -448,6 +495,7 @@ function paintTop(pop){
   $('cXp').textContent = G.xp;
   $('cBone').textContent = G.bones;
   $('cBond').textContent = Math.round(G.bond);
+  $('cEnergy').textContent = G.en;
   if(pop) pop.forEach(k=>{ const el=$('rs'+k); if(!el) return;
     el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); });
   // 받을 수 있는 퀘스트가 있으면 탭에 점을 찍는다
@@ -467,39 +515,56 @@ function paintHome(){
   $('lvR').textContent = `${G.learned.length} / ${need}`;
   if (homeDog) homeDog.setStage(st);
   // 홈의 큰 버튼은 «지금 해야 할 노드»로 바로 데려간다
+  enRegen();
   const i = currentIndex(G.done);
   const n = PATH[i];
   const s = $('btnTrain');
-  if(!n){ s.querySelector('strong').textContent='다시 훈련하기';
-          s.querySelector('small').textContent='코스를 모두 끝냈어요 · 복습 5문제'; }
-  else if(n.type==='lesson'){ s.querySelector('strong').textContent = G.done.length? '훈련 계속하기':'첫 훈련 시작하기';
-          s.querySelector('small').textContent = `${n.unit.title} · ${n.label}`; }
+  const needsEn = !n || n.type==='lesson';
+  if(needsEn && G.en<=0){
+    s.querySelector('strong').textContent='⚡ 에너지 회복 중';
+    s.querySelector('small').textContent=`약 ${enMins()}분 뒤 ⚡1 · 🦴${EN_REFILL_BONE}으로 바로 채울 수 있어요`;
+  }
+  else if(!n){ s.querySelector('strong').textContent='복습 산책 나가기';
+          s.querySelector('small').textContent='산책길을 다 올랐어요 · 복습 5문제 · ⚡1'; }
+  else if(n.type==='lesson'){ s.querySelector('strong').textContent = G.done.length? '산책 계속하기':'첫 산책 나가기';
+          s.querySelector('small').textContent = `${n.unit.title} · ${n.label} · ⚡1`; }
   else { s.querySelector('strong').textContent = n.type==='chest'?'보물상자 열기':'유닛 완료 보상 받기';
           s.querySelector('small').textContent = `${n.unit.title} · +${n.reward} 🦴`; }
   paintTop();
 }
 
-/* ═══ 훈련 길 ═══ */
+/* ═══ 산책길 ═══
+   ★아래에서 위로 오른다. DOM 은 위→아래로 흐르므로 «마지막 유닛부터» 그리고,
+   각 유닛의 배너는 구간의 아래쪽(입구 이정표)에 놓는다. 화면을 열면 현재 노드로 스크롤한다. */
 function paintPath(){
   const ci = currentIndex(G.done);
   const box = $('pathBody'); box.innerHTML='';
-  UNITS.forEach((u, ui) => {
+  const dxOf = idx => Math.round(Math.sin(idx * 1.15) * 78);
+
+  if(ci >= PATH.length){                       // 꼭대기 — DOM 맨 위 = 산책길 정상
+    const d=document.createElement('div'); d.id='pathDone';
+    d.innerHTML = `<b>산책길 꼭대기까지 올라왔어요 🎉</b><small>새 길은 준비 중이에요. 복습 산책으로 감을 유지해 보세요</small>`;
+    box.appendChild(d);
+  }
+  for(let ui=UNITS.length-1; ui>=0; ui--){
+    const u = UNITS[ui];
     const nodes = PATH.filter(n=>n.ui===ui);
     const unitLocked = nodes[0].idx > ci;
-    const ban = document.createElement('div');
-    ban.className = 'ubanner' + (unitLocked?' lockU':'');
-    ban.style.setProperty('--c', u.color); ban.style.setProperty('--cd', shade(u.color,.78));
-    ban.innerHTML = `<div><small>${u.no}</small><b>${unitLocked?'🔒 '+u.title:u.title}</b></div>
-                     <button class="gd" data-hint="${u.hint}">📖</button>`;
-    ban.querySelector('.gd').onclick = e => toast(e.currentTarget.dataset.hint);
-    box.appendChild(ban);
-
-    nodes.forEach(n => {
+    let prevDx = null;                          // 바로 위 노드의 dx — 발자국 연결용
+    for(let k=nodes.length-1; k>=0; k--){
+      const n = nodes[k];
       const done = G.done.includes(n.id);
       const isCur = n.idx === ci;
       const lock = n.idx > ci;
-      // 지그재그: 유닛 하나(4~5노드) 안에서 좌우로 한 번씩 흔들리도록 주기를 잡는다
-      const dx = Math.round(Math.sin(n.idx * 1.15) * 74);
+      const dx = dxOf(n.idx);
+      if(prevDx !== null){                      // 위 노드와 이 노드 사이에 발자국을 찍는다
+        const paws=document.createElement('div'); paws.className='paws';
+        const a=Math.round(prevDx+(dx-prevDx)*0.38), b2=Math.round(prevDx+(dx-prevDx)*0.72);
+        paws.innerHTML = `<span style="transform:translateX(calc(-50% + ${b2}px)) rotate(-14deg)">🐾</span>`+
+                         `<span style="top:12px;transform:translateX(calc(-50% + ${a}px)) rotate(10deg)">🐾</span>`;
+        box.appendChild(paws);
+      }
+      prevDx = dx;
       const row = document.createElement('div'); row.className='nodeRow';
       const wrap = document.createElement('div'); wrap.className='nodeWrap'; wrap.style.setProperty('--dx', dx+'px');
       const b = document.createElement('button');
@@ -507,37 +572,42 @@ function paintPath(){
       b.style.setProperty('--nc', lock?'#DDE7E2':u.color);
       b.style.setProperty('--nd', lock?'#C6D5CE':shade(u.color,.75));
       b.innerHTML = n.type==='chest' ? '<em>🎁</em>' : n.type==='trophy' ? '<em>🏆</em>' : (done?'✓':'★');
-      b.onclick = () => lock ? toast('앞의 훈련을 먼저 끝내 주세요')
+      b.onclick = () => lock ? toast('아래쪽 훈련을 먼저 끝내 주세요')
                  : done ? toast(n.type==='lesson'?'이미 끝낸 훈련이에요':'이미 받은 보상이에요')
                  : enterNode(n);
       if(isCur){ const h=document.createElement('div'); h.className='halo';
                  h.style.setProperty('--nc', u.color); wrap.appendChild(h); }
       wrap.appendChild(b); row.appendChild(wrap); box.appendChild(row);
 
-      if(isCur){
+      if(isCur){                                // 시작 카드는 노드 바로 아래(내가 서 있는 쪽)
         const card = document.createElement('div'); card.className='startCard';
         card.style.setProperty('--c', u.color); card.style.setProperty('--cd', shade(u.color,.78));
         card.style.setProperty('--dx', dx+'px');
         const sub = n.type==='lesson' ? n.label : n.type==='chest' ? '보물상자' : '유닛 완료';
-        const btn = n.type==='lesson' ? `시작 +${XP_LESSON} XP` : `열기 +${n.reward} 🦴`;
+        const btn = n.type==='lesson' ? `시작 +${XP_LESSON} XP · ⚡1` : `열기 +${n.reward} 🦴`;
         card.innerHTML = `<b>${n.type==='lesson'?byId(n.sig).name:n.label}</b><small>${sub}</small>
                           <button>${btn}</button>`;
         card.querySelector('button').onclick = ()=>enterNode(n);
         box.appendChild(card);
       }
-    });
-  });
-  if(ci >= PATH.length){
-    const d=document.createElement('div'); d.id='pathDone';
-    d.innerHTML = `<b>코스를 모두 끝냈어요 🎉</b><small>새 유닛은 준비 중이에요. 그동안 복습으로 감을 유지해 보세요</small>`;
-    box.appendChild(d);
+    }
+    const ban = document.createElement('div');
+    ban.className = 'ubanner' + (unitLocked?' lockU':'');
+    ban.style.setProperty('--c', u.color); ban.style.setProperty('--cd', shade(u.color,.78));
+    ban.innerHTML = `<div><small>${u.no} · 산책길 입구</small><b>${unitLocked?'🔒 '+u.title:u.title}</b></div>
+                     <button class="gd" data-hint="${u.hint}">📖</button>`;
+    ban.querySelector('.gd').onclick = e => toast(e.currentTarget.dataset.hint);
+    box.appendChild(ban);
   }
   document.querySelector('.tab[data-go="path"]').classList.toggle('alert', ci < PATH.length);
 }
 
 function enterNode(n){
-  if(n.type === 'lesson') return startRound(n);
-  // 상자·트로피는 즉시 보상
+  if(n.type === 'lesson'){
+    if(!enSpend()) return openEnergy();       // ⚡는 사람 몫 — 멍이는 항상 준비되어 있다
+    return startRound(n);
+  }
+  // 상자·트로피는 즉시 보상 (에너지를 쓰지 않는다)
   G.done.push(n.id); G.bones += n.reward; save();
   paintTop(['Bone']); paintPath(); paintHome();
   toast(`${n.type==='chest'?'보물상자':'유닛 완료'} · +${n.reward} 🦴`);
@@ -597,6 +667,27 @@ function openDex(s){
   $('dsh').classList.add('on');
 }
 $('dshGo').onclick = ()=>$('dsh').classList.remove('on');
+
+/* ═══ ⚡에너지 시트 ═══ */
+function openEnergy(){
+  enRegen();
+  $('enCnt').textContent = `${G.en} / ${EN_MAX}`;
+  $('enTimer').textContent = G.en>=EN_MAX ? '가득 찼어요' : `약 ${enMins()}분 뒤 ⚡1 회복`;
+  const r=$('enRefill');
+  r.disabled = G.bones < EN_REFILL_BONE || G.en >= EN_MAX;
+  r.style.opacity = r.disabled ? .55 : 1;
+  r.textContent = `🦴 ${EN_REFILL_BONE}으로 지금 가득 채우기 (보유 ${G.bones})`;
+  $('ensh').classList.add('on');
+}
+$('enClose').onclick = ()=>$('ensh').classList.remove('on');
+$('enRefill').onclick = ()=>{
+  enRegen();
+  if(G.en>=EN_MAX) return toast('이미 가득 찼어요');
+  if(G.bones<EN_REFILL_BONE) return toast('뼈다귀가 부족해요');
+  G.bones -= EN_REFILL_BONE; G.en = EN_MAX; G.enT = Date.now(); save();
+  paintTop(['Energy','Bone']); $('ensh').classList.remove('on');
+  toast('에너지를 가득 채웠어요 ⚡');
+};
 
 /* ═══ 훈련 로직 ═══ */
 const ROUND = 5;
@@ -683,6 +774,7 @@ function finish(){
   $('progFill').style.width='100%';
   const rate = Math.round(round.right/ROUND*100);
   const before = stageFor(G.learned.length);
+  const refunded = rate===100 ? enRefund() : false;   // 만점이면 ⚡를 돌려준다 — 잘하는 사람에겐 마찰이 없다
 
   const xp = round.xp + XP_LESSON + (rate===100 ? XP_PERFECT : 0);
   const bone = rate===100 ? 5 : rate>=60 ? 2 : 0;   // 잘하면 뼈다귀도 조금 떨어진다
@@ -704,7 +796,9 @@ function finish(){
 
   $('rEmo').textContent = rate===100?'🎉':rate>=60?'🐕':'🐶';
   $('rTitle').textContent = rate===100?'완벽했어요!':rate>=60?'잘하고 있어요':'천천히 다시 해볼까요';
-  $('rSub').textContent = rate===100?'멍이의 신호를 전부 읽어냈어요' : `${ROUND}개 중 ${round.right}개를 읽어냈어요`;
+  $('rSub').textContent = rate===100
+    ? ('멍이의 신호를 전부 읽어냈어요' + (refunded?' · ⚡1 돌려받았어요':''))
+    : `${ROUND}개 중 ${round.right}개를 읽어냈어요`;
   $('scRight').textContent = round.right;
   $('scRate').textContent = rate+'%';
   $('scBond').textContent = '+'+bond;
@@ -728,12 +822,15 @@ function finish(){
     mw.innerHTML = `<h3>놓친 신호 없음</h3><div class="miss"><em>✨</em><span><b>전부 읽어냈어요</b><small>다음엔 더 작은 신호에 도전해 보세요</small></span></div>`;
   }
   const nxt = PATH[currentIndex(G.done)];
-  $('rAgain').textContent = nxt ? '다음 훈련으로' : '복습 한 판 더';
+  $('rAgain').textContent = nxt ? '다음 산책으로' : '복습 산책 한 바퀴';
   show('res'); paintHome(); paintTop(bone?['Xp','Bone','Bond']:['Xp','Bond']);
 }
 
 /* ═══ 배선 ═══ */
-const goCurrent = () => { const n = PATH[currentIndex(G.done)]; n ? enterNode(n) : startRound(null); };
+const goCurrent = () => { const n = PATH[currentIndex(G.done)];
+  if(n) return enterNode(n);
+  if(!enSpend()) return openEnergy();          // 복습 산책도 ⚡1
+  startRound(null); };
 $('btnTrain').onclick = goCurrent;
 $('tBack').onclick = ()=>{ trainDog && trainDog.idle(); show('path'); };
 $('rAgain').onclick = goCurrent;
@@ -773,7 +870,9 @@ try{
         if(!G.done.includes(p.id)) G.done.push(p.id);
         if(p.type==='lesson' && !G.learned.includes(p.sig)) G.learned.push(p.sig); }
       save(); paintHome(); paintPath(); },
+    give:o=>{ Object.assign(G,o); save(); paintTop(); if(cur==='home') paintHome(); },
   };
+  setInterval(()=>{ if(enRegen()){ paintTop(['Energy']); if(cur==='home') paintHome(); } }, 15000);
 }catch(e){
   fail('불러오지 못했습니다: ' + (e && e.message ? e.message : e));
 }
