@@ -1378,6 +1378,11 @@ try{
   homeDog = mkDog('homeCv');
   trainDog = mkDog('trainCv');
   trainDog && trainDog.setCollar(G.collar);
+  /* ★대기 모션은 홈(마당)에만 켠다.
+     산책길 «신호 읽기» 화면(trainCv)은 강아지의 자세·표정이 곧 «문제»다 —
+     여기에 들썩임·고갯짓을 얹으면 정답 신호를 흐려 학습을 망친다.
+     훈련장(yardDog)도 매 rep 이 판정 대상이라 켜지 않는다. */
+  homeDog && homeDog.setLife(true);
   paintHome(); paintTop();
   show('home');
   $('boot').classList.add('off');
