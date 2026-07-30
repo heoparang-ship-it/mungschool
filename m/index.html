@@ -1519,6 +1519,13 @@ const IN_DX = ['relaxed','lipLick','yawn','lookAway','whaleEye'];
 const IN_LAST = 10;
 let introDog=null, IN = null;
 
+/* ?intro=1 — 첫 실행 진단을 «미리보기»로 다시 본다.
+   판단하려면 여러 번 봐야 하는데, 그때마다 데이터를 지우게 하는 건 말이 안 된다.
+   미리보기에서는 저장을 일절 하지 않고, 끝나면 들어올 때 상태로 되돌린다. */
+const PREVIEW = (()=>{ try{ return new URLSearchParams(location.search).get('intro')==='1'; }
+                       catch(e){ return false; } })();
+let introSnap = null;
+
 function setIntroSay(face, html){ $('inFace').textContent = face; $('inMsg').innerHTML = html; }
 function introShowDog(on){
   $('inStage').style.display = on ? 'flex' : 'none';
@@ -1528,12 +1535,19 @@ function introShowDog(on){
   if(on) requestAnimationFrame(()=>introDog && introDog.refit());
 }
 
-function startIntro(){
-  IN = { step:0, right:0, answers:{}, locked:false };
+function startIntro(preview){
+  const pv = !!preview;
+  IN = { step:0, right:0, answers:{}, locked:false, preview:pv };
+  if(pv) introSnap = JSON.stringify(G);
   show('intro');
   if(!introDog){ try{ introDog = createDogView($('introCv')); }catch(e){ introDog=null; } }
-  track('intro_start');
+  track('intro_start', { preview:pv });
   paintIntro();
+}
+/** 미리보기 종료 — 들어올 때의 저장분을 그대로 되돌린다 */
+function endPreview(){
+  if(introSnap){ try{ G = JSON.parse(introSnap); }catch(e){} introSnap=null; }
+  save(); paintTop(); show('home');
 }
 function paintIntro(){
   const s = IN.step;
@@ -1622,8 +1636,7 @@ function paintIntro(){
   }
   else {                                       /* ⑥ 결과 — 여기서 ?? 가 숫자로 바뀐다 */
     const pct = Math.round(IN.right/IN_DX.length*100);
-    G.intro = { done:1, q1:IN.answers.q1||'', q2:IN.answers.q2||'', dx:IN.right };
-    save();
+    if(!IN.preview){ G.intro = { done:1, q1:IN.answers.q1||'', q2:IN.answers.q2||'', dx:IN.right }; save(); }
     setIntroSay(pct>=80?'🎉':pct>=40?'🐕':'🐶',
       pct>=80 ? '벌써 잘 읽으시네요! 남은 건 <b>헷갈리는 순간</b>을 가르는 연습이에요.'
       : pct>=40 ? '읽고 계신 신호가 있어요. <b>비슷해 보이는 신호</b>부터 갈라 볼게요.'
@@ -1645,9 +1658,15 @@ function paintIntro(){
        </div>`;
     countUp($('inPct'), pct);
     sndTrophy && sndTrophy();
-    track('intro_done', { pct, q1:G.intro.q1, q2:G.intro.q2 });
-    $('inNext').textContent='이제 이름을 지어 주세요'; $('inNext').style.display='block';
-    $('inNext').onclick = ()=>{ show('home'); openNaming(); };
+    track('intro_done', { pct, q1:IN.answers.q1||'', q2:IN.answers.q2||'', preview:!!IN.preview });
+    $('inNext').style.display='block';
+    if(IN.preview){
+      $('inNext').textContent='미리보기 끝 — 돌아가기';
+      $('inNext').onclick = ()=>{ endPreview(); };
+    } else {
+      $('inNext').textContent='이제 이름을 지어 주세요';
+      $('inNext').onclick = ()=>{ show('home'); openNaming(); };
+    }
   }
 }
 function introAnswer(btn, chosen, sig, i){
@@ -1665,10 +1684,10 @@ function introAnswer(btn, chosen, sig, i){
     $('inWhyP').textContent = why ? cfill(why, { name:'저' }) : `이건 «${sig.name}» — ${sig.mean}`;
     $('inWhy').classList.add('on');
     /* 놓친 신호는 산책길이 이어받는다 (miss 우선 출제가 이미 돌고 있다) */
-    G.miss[sig.id] = (G.miss[sig.id]||0) + 1;
+    if(!IN.preview) G.miss[sig.id] = (G.miss[sig.id]||0) + 1;
   }
-  track('intro_dx', { sig:sig.id, ok, chose:chosen.id });
-  save();
+  track('intro_dx', { sig:sig.id, ok, chose:chosen.id, preview:!!IN.preview });
+  if(!IN.preview) save();
   $('inNext').textContent = i>=IN_DX.length-1 ? '결과 보기' : '다음';
   $('inNext').style.display='block';
   $('inNext').onclick = ()=>{ IN.step++; paintIntro(); };
@@ -1681,6 +1700,7 @@ function countUp(el, to){
   requestAnimationFrame(tick);
 }
 $('inSkip').onclick = ()=>{
+  if(IN.preview){ track('intro_skip', { step:IN.step, preview:true }); return endPreview(); }
   const left = Math.max(0, IN_LAST - IN.step);
   openLeaveSheet('조금만 더 하면 결과가 나와요',
     `${left}단계만 지나면 «나의 신호 이해도»가 몇 %인지 알려 드릴 텐데, 지금 그만두시겠어요?`,
@@ -1732,7 +1752,8 @@ try{
   /* 첫 실행 순서 — «궁금증 → 측정 → 소유» (말해보카 이식).
      이름 짓기는 맨 앞이 아니라 진단 결과 «뒤»에 온다: 내 실력을 알고 나서 짓는 이름이
      훨씬 «내 개»가 된다. 기존 사용자(G.intro.done)는 이 길을 다시 지나지 않는다. */
-  if(!G.named && !G.intro.done){ setTimeout(startIntro, 400); }
+  if(PREVIEW){ setTimeout(()=>startIntro(true), 400); }        // ?intro=1 — 판단용 미리보기
+  else if(!G.named && !G.intro.done){ setTimeout(()=>startIntro(false), 400); }
   else if(!G.named){ setTimeout(openNaming, 600); }
   else setTimeout(()=>{
     if(G.rounds===0) say('처음 만나서 반가워!', 3400);
