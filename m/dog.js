@@ -16,6 +16,17 @@ const HEAD_CX = 0.22, HEAD_CHIN = 0.46, FACE_W = 0.80;
 const BODY_AR = 431 / 612;          // 몸통 원본 종횡비
 const CHIN_IN_CELL = 386 / CELL;    // 셀 안에서 턱의 세로 위치
 
+/* ★훈련장 포즈 — 몸통 원화를 통째로 갈아끼운다.
+   표정 아틀라스는 «머리»만 담고 있으므로 앉기/엎드리기는 몸통 이미지로 표현한다.
+   포즈마다 목 부착점(headCx·headChin)이 달라지므로 함께 갈아끼우지 않으면
+   머리가 공중에 뜬다 (03_콘텐츠데이터 art/PLACEHOLDER/anchors.json 실측값).
+   ★현재 두 이미지는 «임시»다 — 원화 A1/A2 도착 시 파일과 아래 앵커를 함께 교체할 것. */
+const POSES = {
+  sitPose:  { body:'./body_sit.webp',  face:'relaxed', cx:0.22, chin:0.46  },
+  downPose: { body:'./body_down.webp', face:'relaxed', cx:0.22, chin:0.722 },
+};
+export const POSE_KEYS = Object.keys(POSES);
+
 export const COLLARS = { mint:'#2AB7A9', red:'#E74C3C', yellow:'#F3B13E', blue:'#4A90D9' };
 const collarHex = v => (typeof v === 'string' && v[0] === '#') ? v : (COLLARS[v] || COLLARS.mint);
 
@@ -65,7 +76,7 @@ export function createDogView(el) {
   const faceBase = el.querySelector('.mm-face.base');
   const faceTop = el.querySelector('.mm-face.top');
 
-  const st = { stage: STAGES[0], collar: COLLARS.mint, face: 'relaxed', ex: 1 };
+  const st = { stage: STAGES[0], collar: COLLARS.mint, face: 'relaxed', ex: 1, pose: null };
   let ro = null;
 
   function cellPos(id, cw) {
@@ -79,11 +90,15 @@ export function createDogView(el) {
 
   function layout() {
     const W = el.clientWidth || 260, H = el.clientHeight || 320;
+    /* 포즈가 걸려 있으면 그 포즈의 몸통·목 부착점을 쓴다 (없으면 서 있는 원화 기준) */
+    const P = st.pose ? POSES[st.pose] : null;
+    const HCX  = P ? P.cx   : HEAD_CX;
+    const HCHIN = P ? P.chin : HEAD_CHIN;
     /* ★머리는 몸통 왼쪽으로 튀어나온다. 그 양(leftOver)을 폭 계산에 넣지 않으면 잘린다. */
     const cpb = 1.4 * FACE_W * st.stage.head;                       // cellW / bodyW
-    const leftOver  = Math.max(0, cpb / 2 - HEAD_CX);
-    const rightOver = Math.max(0, HEAD_CX + cpb / 2 - 1);
-    const above     = Math.max(0, cpb * CHIN_IN_CELL - HEAD_CHIN * BODY_AR);
+    const leftOver  = Math.max(0, cpb / 2 - HCX);
+    const rightOver = Math.max(0, HCX + cpb / 2 - 1);
+    const above     = Math.max(0, cpb * CHIN_IN_CELL - HCHIN * BODY_AR);
     const totalW = leftOver + 1 + rightOver, totalH = BODY_AR + above;
     const bw = Math.min(W / totalW, H / totalH) * 0.96 * (st.stage.size / MAX_SIZE);
     const bh = bw * BODY_AR, cw = cpb * bw;
@@ -94,16 +109,17 @@ export function createDogView(el) {
     const body = el.querySelector('.mm-body');
     body.style.left = ox + 'px'; body.style.top = oy + 'px';
     body.style.width = bw + 'px'; body.style.height = bh + 'px';
+    body.style.backgroundImage = `url(${P ? P.body : B})`;
 
     faceBase.style.width = faceTop.style.width = cw + 'px';
     faceBase.style.height = faceTop.style.height = cw + 'px';
-    const fl = ox + HEAD_CX * bw - cw / 2, ft = oy + HEAD_CHIN * bh - cw * CHIN_IN_CELL;
+    const fl = ox + HCX * bw - cw / 2, ft = oy + HCHIN * bh - cw * CHIN_IN_CELL;
     for (const f of [faceBase, faceTop]) { f.style.left = fl + 'px'; f.style.top = ft + 'px'; }
     paintFaces(cw);
 
     // 목줄 — 머리와 몸통이 만나는 자리. 턱에 일부 가려지는 게 자연스럽다
     const sw = totalW * bw, sh = totalH * bw;
-    const nx = (ox + (HEAD_CX + 0.06) * bw) / sw * 100, ny = (oy + (HEAD_CHIN - 0.02) * bh) / sh * 100;
+    const nx = (ox + (HCX + 0.06) * bw) / sw * 100, ny = (oy + (HCHIN - 0.02) * bh) / sh * 100;
     const rx = bw / sw * 15, ry = bh / sh * 11;
     collarG.innerHTML =
       `<path d="M ${nx - rx} ${ny - ry * 0.4} Q ${nx} ${ny + ry * 0.85} ${nx + rx} ${ny - ry * 0.55}
@@ -136,15 +152,23 @@ export function createDogView(el) {
     setCollar(v) { if (!v) return; st.collar = collarHex(v); layout(); },
     setYaw() {},
     stage: () => st.stage,
-    /** pose: (t, ex) => { face, ex } */
+    /** pose: (t, ex) => { face, ex }
+        face 가 몸통 포즈 키('sitPose'·'downPose')면 «표정»이 아니라 «몸통»을 바꾼다. */
     play(pose, ex) {
       const e = (ex == null ? 1 : ex);
       let f = 'relaxed';
       try { const r = pose && pose(0, e); if (r && r.face) f = r.face; } catch (err) {}
-      st.face = f; st.ex = e; paintFaces();
+      if (POSES[f]) { st.pose = f; st.face = POSES[f].face; st.ex = e; layout(); }
+      else { const wasPosed = !!st.pose; st.pose = null; st.face = f; st.ex = e;
+             wasPosed ? layout() : paintFaces(); }
       stage.classList.remove('excited'); void stage.offsetWidth; stage.classList.add('excited');
     },
-    idle() { st.face = 'relaxed'; st.ex = 1; stage.classList.remove('excited'); paintFaces(); },
+    /** 포즈를 직접 세우거나(키) 풀 때(null) — 훈련장이 자세를 «유지»시킬 때 쓴다 */
+    setPose(k) { const nk = POSES[k] ? k : null; if (nk === st.pose) return;
+      st.pose = nk; if (nk) st.face = POSES[nk].face; layout(); },
+    pose: () => st.pose,
+    idle() { const wasPosed = !!st.pose; st.pose = null; st.face = 'relaxed'; st.ex = 1;
+      stage.classList.remove('excited'); wasPosed ? layout() : paintFaces(); },
     refit: layout,
     dispose() { if (ro) ro.disconnect(); el.innerHTML = ''; },
   };

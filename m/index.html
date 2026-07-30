@@ -90,6 +90,42 @@
   .ghost{width:100%;margin-top:9px;border:0;border-radius:16px;padding:12px;background:rgba(255,255,255,.9);
          color:#4a6d64;font-size:13px;font-weight:800;box-shadow:0 3px 10px rgba(60,110,95,.1)}
 
+  /* ═══ 훈련장 진입 (제2의 축) ═══
+     산책길 버튼과 «형제»로 보이되 색으로 갈라야 한다 — 하는 일이 다르기 때문.
+     산책길 = 민트(신호를 읽는다) · 훈련장 = 앰버(명령을 보낸다) */
+  #btnYard{display:none;margin-top:9px;background:linear-gradient(140deg,#FFC978,#D9832B);
+           box-shadow:0 6px 0 #B4691E,0 12px 24px rgba(217,131,43,.25);position:relative}
+  #btnYard.on{display:flex}
+  #btnYard:active{transform:translateY(4px);box-shadow:0 2px 0 #B4691E,0 6px 14px rgba(217,131,43,.2)}
+  #btnYard .newb{position:absolute;top:-7px;right:10px;font-style:normal;font-size:9.5px;font-weight:1000;
+                 letter-spacing:.6px;background:#FF7A6B;color:#fff;border-radius:999px;padding:3px 8px;
+                 box-shadow:0 3px 8px rgba(255,122,107,.45);display:none}
+  #btnYard.new .newb{display:block;animation:nb 1.6s ease-in-out infinite}
+  @keyframes nb{0%,100%{transform:scale(1)}50%{transform:scale(1.09)}}
+  /* 홈 기술 미니카드 — «오늘 뭘 가르쳤나»를 홈에서 한 줄로 */
+  #skills{display:none;gap:6px;margin-top:9px;overflow-x:auto;padding-bottom:2px;
+          scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  #skills::-webkit-scrollbar{display:none}
+  #skills.on{display:flex}
+  #skills .sk{flex:none;background:rgba(255,255,255,.92);border-radius:13px;padding:7px 11px;
+              box-shadow:0 3px 10px rgba(60,110,95,.1);display:flex;align-items:center;gap:7px}
+  #skills .sk b{font-size:12px;font-weight:900;letter-spacing:-.3px;color:var(--ink)}
+  #skills .sk i{font-style:normal;font-size:10px;font-weight:1000;color:#B4691E;
+                background:rgba(255,180,84,.24);border-radius:999px;padding:2px 7px}
+  #skills .sk.max i{color:#17715E;background:rgba(62,194,162,.22)}
+  #skills .sk em{font-style:normal;font-size:15px}
+  /* 도감 «기술» — 신호 카드와 같은 문법, 잠금은 회색 티저 */
+  #dexSkills{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:9px}
+  #dexSkills .sc2{background:#fff;border-radius:16px;padding:11px 12px;text-align:left;border:0;
+                  box-shadow:0 3px 10px rgba(60,110,95,.1)}
+  #dexSkills .sc2 em{font-style:normal;font-size:22px;display:block}
+  #dexSkills .sc2 b{display:block;font-size:13.5px;font-weight:900;margin-top:3px;letter-spacing:-.3px}
+  #dexSkills .sc2 small{display:block;font-size:10.5px;color:var(--sub);font-weight:700;margin-top:2px;line-height:1.5}
+  #dexSkills .sc2.lk{background:rgba(255,255,255,.6);border:1.5px dashed var(--line);box-shadow:none}
+  #dexSkills .sc2.lk em{filter:grayscale(1);opacity:.45}
+  /* 훈련장은 안전영역 여백을 자기 CSS(.ty-head/.ty-toast)에서 직접 처리한다 — 이중 적용 금지 */
+  #yard{padding:0}
+
   /* ═══ 훈련 길 ═══ */
   .sc{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
   .pad{padding:12px 16px 26px;max-width:520px;margin:0 auto;width:100%}
@@ -327,6 +363,8 @@
   </div>
   <div id="acts">
     <button class="big" id="btnTrain"><em>🐾</em><span><strong>오늘의 훈련</strong><small>멍이의 신호를 읽어 보세요 · 5문제</small></span></button>
+    <button class="big" id="btnYard"><em>🎓</em><span><strong>훈련하기</strong><small>명령을 가르쳐 보세요 · ⚡1</small></span><i class="newb">NEW</i></button>
+    <div id="skills"></div>
     <button class="ghost" id="btnAbout">이 앱은 무엇인가요?</button>
   </div>
 </section>
@@ -339,6 +377,8 @@
   <div class="qhead"><div><b>퀘스트</b><small>퀘스트를 완료하고 뼈다귀를 받으세요</small></div><em>🎯</em></div>
   <div class="sect"><h3>오늘의 퀘스트</h3><span id="qTimer">⏱ 남은 시간</span></div>
   <div id="qList"></div>
+  <div class="sect" id="qTrainHead"><h3>훈련장 퀘스트</h3><span>명령을 가르치면 올라가요</span></div>
+  <div id="qTrain"></div>
   <div class="sect"><h3>진행 예정 퀘스트</h3></div>
   <div class="soon"><span style="font-size:26px;filter:grayscale(1);opacity:.45">🎁</span><div class="qi"><b>친구와 함께 훈련하기</b></div></div>
   <div class="soon"><span style="font-size:26px;filter:grayscale(1);opacity:.45">🎁</span><div class="qi"><b>주간 리그 참가하기</b></div></div>
@@ -349,6 +389,8 @@
   <div class="dhead"><b>신호 도감</b><small id="dexCount">0 / 10 수집</small></div>
   <div style="font-size:12px;font-weight:700;color:var(--sub)">훈련에서 읽어낸 신호가 여기에 모입니다</div>
   <div id="dexGrid"></div>
+  <div class="sect" id="dexSkillHead"><h3>기술</h3><span id="dexSkillCount">0 / 6</span></div>
+  <div id="dexSkills"></div>
 </div></div></section>
 
 <!-- ══ 상점 ══ -->
@@ -356,6 +398,8 @@
   <div class="shopHead"><div><b>상점</b><small>훈련으로 모은 뼈다귀를 쓰는 곳</small></div><em>🛍️</em></div>
   <div class="sect"><h3>에너지</h3></div>
   <div id="shopEnergy"></div>
+  <div class="sect" id="shopTreatHead"><h3>간식</h3><span>훈련장에서 써요</span></div>
+  <div id="shopTreat"></div>
   <div class="sect"><h3>목줄</h3><span>바로 착용돼요</span></div>
   <div id="shopCollar"></div>
   <div class="sect"><h3>준비 중 — 찜해 두면 먼저 만들어요</h3></div>
@@ -378,6 +422,9 @@
   <div id="ask">지금 멍이는 어떤 상태일까요?</div>
   <div id="opts"></div>
 </section>
+
+<!-- ══ 훈련장 ══ 명령을 «보내는» 법을 배우는 마당. 내부는 train.js 가 통째로 그린다 -->
+<section class="scr full" id="yard"></section>
 
 <!-- ══ 결과 ══ -->
 <section class="scr full" id="res"><div class="rw">
@@ -475,6 +522,14 @@ import { createDogView, STAGES, stageFor } from './dog.js';
 import { SIGNALS, tierOf } from './signals.js';
 import { UNITS, PATH, currentIndex, poolFor, exFor, QUESTS,
          XP_PER_RIGHT, XP_LESSON, XP_PERFECT } from './course.js';
+/* ═══ 훈련장 (제2의 축) ═══
+   train.js  = 게임플레이 전량 (판정·rep 루프·FTUE·리포트)
+   voice.js  = 음성 인식·톤 채점·흔들기 (전부 온디바이스)
+   content-for-A.js = 카피 원본(content.js)을 train.js 의 키 모양으로 재배치하는 어댑터.
+     ★카피는 content.js 한 곳에만 산다. 두 벌로 복제하면 반드시 한쪽이 낡는다. */
+import { createTrainingYard, extraSounds, unlockedOf, lvOf } from './train.js';
+import * as trainContent from './content-for-A.js';
+import { createVoice } from './voice.js';
 
 const $ = id => document.getElementById(id);
 const byId = id => SIGNALS.find(s=>s.id===id);
@@ -491,10 +546,17 @@ const KEY = 'mungschool-mobile-v1';
 /* ⚡에너지는 «사람의 것»이다. 멍이는 지치지 않는다 — 지치는 건 훈련하는 사람이고,
    시간이 지나면 돌아오며, 뼈다귀로 바로 채울 수 있다. (마찰이 곧 수익 모델의 입구) */
 const EN_MAX = 5, EN_MS = 30*60*1000, EN_REFILL_BONE = 30;
-const DEF = { v:4, bond:0, xp:0, bones:0, en:EN_MAX, enT:0, done:[], learned:[], miss:{}, streak:0, lastDay:'',
+/* ═══ 저장 스키마 v5 ═══
+   v4 → v5: 훈련장 상태 G.tr 과 퀘스트 훈련 트랙(reps·succ·tone) 추가.
+   기존 저장분은 지우지 않는다 — 없는 키만 기본값으로 채워 넣는다(migrate 참조). */
+const TR_DEF = () => ({
+  cmds:{}, treats:0, mood:0, gauge:0, mic:'unknown',
+  tone:{n:0,len:0,firm:0,once:0}, todayGain:{}, day:'', ftue:0, breed:'chi',
+});
+const DEF = { v:5, bond:0, xp:0, bones:0, en:EN_MAX, enT:0, done:[], learned:[], miss:{}, streak:0, lastDay:'',
               sessions:0, best:0, rounds:0, name:'멍이', named:false, mute:false,
-              collar:'mint', owned:['mint'], wish:{},
-              q:{day:'',lessons:0,right:0,xp:0,claimed:[]} };
+              collar:'mint', owned:['mint'], wish:{}, tr:TR_DEF(),
+              q:{day:'',lessons:0,right:0,xp:0,reps:0,succ:0,tone:0,claimed:[]} };
 
 /* ═══ 분석 이벤트 ═══ 배포 후 정부지원 서류에 쓸 리텐션 숫자는 지금부터 쌓아야 한다 */
 const EVK = 'mungschool-mobile-ev';
@@ -544,7 +606,25 @@ function load(){
   if(!Array.isArray(G.owned) || !G.owned.length) G.owned=['mint'];
   if(!G.owned.includes(G.collar)) G.collar='mint';
   if(typeof G.wish!=='object' || !G.wish) G.wish={};
+  migrateV5();
   rollQuests();
+}
+/** v4 이하 저장분을 v5(훈련장)로 끌어올린다. 값이 있으면 절대 덮어쓰지 않는다. */
+function migrateV5(){
+  const d = TR_DEF();
+  if(typeof G.tr!=='object' || !G.tr) G.tr = d;
+  for(const k in d) if(G.tr[k]==null) G.tr[k] = d[k];
+  if(typeof G.tr.cmds!=='object' || !G.tr.cmds) G.tr.cmds = {};
+  for(const id in trainContent.COMMANDS){
+    const c = G.tr.cmds[id];
+    if(!c || typeof c!=='object'){ G.tr.cmds[id] = {m:0,lv:0,tries:0,succ:0,masterHits:0}; continue; }
+    ['m','lv','tries','succ','masterHits'].forEach(f=>{ if(typeof c[f]!=='number') c[f]=0; });
+  }
+  if(typeof G.tr.tone!=='object' || !G.tr.tone) G.tr.tone = d.tone;
+  if(typeof G.tr.todayGain!=='object' || !G.tr.todayGain) G.tr.todayGain = {};
+  if(!trainContent.BREEDS[G.tr.breed]) G.tr.breed = 'chi';
+  ['reps','succ','tone'].forEach(k=>{ if(typeof G.q[k]!=='number') G.q[k]=0; });
+  G.v = 5;
 }
 const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(G)) }catch(e){} };
 
@@ -575,7 +655,7 @@ const enMins = () => G.en>=EN_MAX ? 0 : Math.max(1, Math.ceil((G.enT + EN_MS - D
 /** 하루가 바뀌면 오늘의 퀘스트를 새로 깐다 */
 function rollQuests(){
   const d = today();
-  if(G.q.day !== d){ G.q = { day:d, lessons:0, right:0, xp:0, claimed:[] }; }
+  if(G.q.day !== d){ G.q = { day:d, lessons:0, right:0, xp:0, reps:0, succ:0, tone:0, claimed:[] }; }
 }
 
 /* ═══ 화면 전환 ═══ */
@@ -590,6 +670,8 @@ function show(id){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.go===id));
   if(id==='home'){ paintHome(); homeDog && homeDog.refit(); }   // 돌아올 때마다 새로 그린다 — 낡은 라벨 금지
   if(id==='train') trainDog && trainDog.refit();
+  if(id==='yard') yardDog && yardDog.refit();
+  if(id!=='yard') closeYard();      // 훈련장을 떠나면 전역 리스너까지 반드시 걷는다
   if(id==='path'){ paintPath();
     requestAnimationFrame(()=>{ const t=document.querySelector('#path .startCard')
       || document.querySelector('#path .halo') || document.querySelector('#pathDone');
@@ -616,7 +698,8 @@ function paintTop(pop){
   if(pop) pop.forEach(k=>{ const el=$('rs'+k); if(!el) return;
     el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); });
   // 받을 수 있는 퀘스트가 있으면 탭에 점을 찍는다
-  const ready = QUESTS.some(q=>!G.q.claimed.includes(q.id) && G.q[q.track] >= q.goal);
+  const pool = yardUnlocked() ? QUESTS.concat(TRAIN_QUESTS) : QUESTS;
+  const ready = pool.some(q=>!G.q.claimed.includes(q.id) && (G.q[q.track]||0) >= q.goal);
   document.querySelector('.tab[data-go="quest"]').classList.toggle('alert', ready);
 }
 
@@ -654,7 +737,42 @@ function paintHome(){
           s.querySelector('small').textContent = `${n.unit.title} · ${n.label} · ⚡1`; }
   else { s.querySelector('strong').textContent = n.type==='chest'?'보물상자 열기':'유닛 완료 보상 받기';
           s.querySelector('small').textContent = `${n.unit.title} · +${n.reward} 🦴`; }
+  paintYardEntry();
   paintTop();
+}
+
+/* ═══ 훈련장 진입 · 기술 미니카드 ═══
+   해금은 «산책길 1레슨 완료» (v2 §5 전제). 그전에는 버튼 자체를 숨긴다 —
+   할 수 없는 걸 보여 주고 잠가 두면 첫 화면이 무거워진다. */
+const yardUnlocked = () => G.done.some(id=>{ const n=PATH.find(p=>p.id===id); return n && n.type==='lesson'; });
+function paintYardEntry(){
+  const b = $('btnYard'), on = yardUnlocked();
+  b.classList.toggle('on', on);
+  b.classList.toggle('new', on && (G.tr.ftue||0) < 10);   // 한 번 해보면 NEW 는 사라진다
+  if(on){
+    enRegen();
+    const un = unlockedCmds();
+    const best = un.map(id=>G.tr.cmds[id]).sort((a,b2)=>b2.m-a.m)[0];
+    b.querySelector('small').textContent = (G.tr.ftue||0) < 10
+      ? `${J(G.name,'이','가')} 첫 명령을 기다려요 · 무료`
+      : G.en<=0 ? `⚡ 회복 중 · 약 ${enMins()}분 뒤 ⚡1`
+      : `명령 ${un.length}개 · 최고 Lv${best?lvOf(best.m):0} · ⚡1`;
+  }
+  // 기술 미니카드 — 해금된 명령만, 숙련도 높은 순
+  const box = $('skills');
+  const list = on ? unlockedCmds() : [];
+  box.classList.toggle('on', list.length>0);
+  box.innerHTML = list
+    .map(id=>({id, c:G.tr.cmds[id]||{m:0}, name:trainContent.COMMANDS[id].name}))
+    .sort((a,b2)=>b2.c.m-a.c.m)
+    .map(x=>{ const lv = lvOf(x.c.m);
+      return `<div class="sk${lv>=5?' max':''}"><em>${lv>=5?'🏆':'🐾'}</em>`+
+             `<b>${x.name}</b><i>Lv${lv}</i></div>`; }).join('');
+}
+/** 해금된 명령 id 목록 — 규칙은 train.js 의 unlockedOf 하나만 쓴다(두 벌로 만들면 어긋난다) */
+function unlockedCmds(){
+  const u = unlockedOf(G.tr, trainContent.COMMANDS);
+  return Object.keys(trainContent.COMMANDS).filter(id=>u[id]);
 }
 
 /* ═══ 산책길 ═══
@@ -776,7 +894,40 @@ function paintQuests(){
     };
     box.appendChild(el);
   });
+  paintTrainQuests();
   paintTop();
+}
+/* 훈련장 퀘스트 — 기존 3종과 «별도 칸»으로 둔다.
+   같은 목록에 섞어 로테이션하면 산책길만 하는 사람이 받을 수 없는 퀘스트를 만나 버린다.
+   해금(산책길 1레슨) 전에는 칸 자체를 숨긴다. */
+const TRAIN_QUESTS = [
+  { id:'tq_reps', title:'훈련 rep 10회',  goal:10, bone:10, track:'reps' },
+  { id:'tq_succ', title:'명령 성공 5회',  goal:5,  bone:15, track:'succ' },
+  { id:'tq_tone', title:'톤 만점 3회',    goal:3,  bone:20, track:'tone' },
+];
+function paintTrainQuests(){
+  const on = yardUnlocked();
+  $('qTrainHead').style.display = on ? '' : 'none';
+  const box = $('qTrain'); box.style.display = on ? '' : 'none';
+  box.innerHTML='';
+  if(!on) return;
+  TRAIN_QUESTS.forEach(q=>{
+    const have = Math.min(G.q[q.track]||0, q.goal);
+    const got = G.q.claimed.includes(q.id);
+    const ready = !got && have >= q.goal;
+    const el = document.createElement('div'); el.className='quest';
+    el.innerHTML = `<div class="qi"><b>${q.title}</b>
+        <div class="qbar"><i style="width:${have/q.goal*100}%"></i><span>${have} / ${q.goal}</span></div></div>
+        <button class="chest ${got?'got':ready?'ready':''}">${got?'✅':'🎁'}</button>`;
+    el.querySelector('.chest').onclick = ()=>{
+      if(got) return toast('이미 받았어요');
+      if(!ready) return toast(`아직 ${q.goal-have}개 남았어요`);
+      G.q.claimed.push(q.id); G.bones += q.bone; save(); track('quest_claim',{id:q.id});
+      sndChest(); vib(25);
+      paintTop(['Bone']); paintQuests(); toast(`퀘스트 완료 · +${q.bone} 🦴`);
+    };
+    box.appendChild(el);
+  });
 }
 /** 훈련 결과를 오늘의 퀘스트에 반영 */
 function bumpQuests({lessons=0, right=0, xp=0}){
@@ -797,6 +948,27 @@ function paintDex(){
       ? `<em>${s.emoji}</em><b>${s.name}</b><i style="background:${t.color}1f;color:${t.color}">${t.label}</i>`
       : `<em>❓</em><b>???</b><i style="background:#E7EFEB;color:#A9BDB5">미수집</i>`;
     b.onclick = ()=> got ? openDex(s) : toast('훈련에서 이 신호를 읽어내면 열려요');
+    g.appendChild(b);
+  });
+  paintDexSkills();
+}
+/* 도감 «기술» — 마스터(Lv5)한 명령만 열린다.
+   v2 §4-F: 마스터 = «간식 없이도 첫 명령에 하는 개». 그래서 카드에 수신호와 실제 팁을 함께 싣는다. */
+function paintDexSkills(){
+  const C = trainContent.COMMANDS, ids = Object.keys(C);
+  const mastered = ids.filter(id=>lvOf((G.tr.cmds[id]||{m:0}).m) >= 5);
+  $('dexSkillCount').textContent = `${mastered.length} / ${ids.length} 마스터`;
+  const g = $('dexSkills'); g.innerHTML='';
+  ids.forEach(id=>{
+    const c = C[id], got = lvOf((G.tr.cmds[id]||{m:0}).m) >= 5;
+    const b = document.createElement('button');
+    b.className = 'sc2' + (got?'':' lk');
+    b.innerHTML = got
+      ? `<em>🏆</em><b>${c.name}</b><small>${c.signSoft || c.sign || ''}</small>`
+      : `<em>🎓</em><b>???</b><small>훈련장에서 «${c.name}»${jong(c.name)?'을':'를'} Lv5까지 올리면 열려요</small>`;
+    b.onclick = ()=> got
+      ? toast(c.tip || `${c.name} — ${c.signSoft || c.sign || ''}`)
+      : toast('훈련장에서 마스터하면 열려요');
     g.appendChild(b);
   });
 }
@@ -836,6 +1008,21 @@ function paintShop(){
     G.bones-=EN_REFILL_BONE; G.en=EN_MAX; G.enT=Date.now(); save(); track('refill',{from:'shop'});
     sndChest(); paintTop(['Energy','Bone']); paintShop(); toast('에너지를 가득 채웠어요 ⚡');
   };
+  /* 간식 — 🦴가 «매일 도는» 유일한 소모처다 (v2 §3-1: 세션당 2~3개 소비 설계).
+     훈련장을 아직 열지 않았으면 진열하지 않는다 — 쓸 데 없는 물건을 팔지 않는다. */
+  const tv = $('shopTreat'), tvOn = yardUnlocked();
+  $('shopTreatHead').style.display = tvOn?'':'none';
+  tv.style.display = tvOn?'':'none';
+  if(tvOn){
+    tv.innerHTML = `<div class="item"><em>🍖</em><div class="qi"><b>간식 5개</b>
+        <small>지금 🍖${G.tr.treats}개 · 루어링·보상·페이드아웃에 써요</small></div>
+        <button class="buy ${G.bones>=10?'can':''}" id="shopTreatBuy">🦴 10</button></div>`;
+    $('shopTreatBuy').onclick = ()=>{
+      if(G.bones<10) return toast('뼈다귀가 부족해요');
+      G.bones-=10; G.tr.treats+=5; save(); track('treat_buy',{n:5,from:'shop'});
+      sndChest(); vib(20); paintTop(['Bone']); paintShop(); toast('간식 5개를 샀어요 🍖');
+    };
+  } else tv.innerHTML='';
   // 목줄 — 실제로 착용된다
   const c = $('shopCollar'); c.innerHTML='';
   COLLAR_ITEMS.forEach(it=>{
@@ -892,6 +1079,83 @@ $('enRefill').onclick = ()=>{
   paintTop(['Energy','Bone']); $('ensh').classList.remove('on');
   toast('에너지를 가득 채웠어요 ⚡');
 };
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ═══ 훈련장 배선 ═══ (CONTRACTS §4)
+   train.js 는 «화면 하나»를 통째로 그린다. 이 앱이 넘겨야 하는 건 여섯 가지다:
+     상태(G·save) · 로그(track) · 조사(J) · 강아지 뷰 · 음성 · 카피.
+   ★열 때마다 새로 만들고, 떠날 때마다 dispose 한다 —
+     train.js 는 pagehide/visibilitychange 를 «전역»에 걸기 때문에
+     정리하지 않으면 산책길에서도 훈련장 리스너가 살아 있게 된다.
+   ═══════════════════════════════════════════════════════════════════════ */
+let yard = null, yardDog = null, yardDogEl = null, yardVoice = null, closingYard = false;
+/* QA 훅 — 판정 굴림을 밖에서 고정할 수 있어야 «3연속 실패 불가»·«거부 분기»를 재현 검증할 수 있다.
+   기존 __MM__.advance/grant/give 와 같은 성격의 테스트 구멍이며, 평소엔 null 이라 Math.random 이다. */
+let yardRng = null;
+
+/* 으르렁·낑낑은 train.js 가 이 앱의 tone() 으로 만들어 준다 (CONTRACTS §4) */
+const yardSnd = Object.assign(
+  { ok:sndOk, no:sndNo, chest:sndChest, trophy:sndTrophy }, extraSounds(tone));
+
+/** 훈련장이 찍는 이벤트를 그대로 흘려보내되, 퀘스트 트랙만 가로채 올린다.
+    (train.js 는 G.q.reps 만 올린다 — 성공·톤 트랙은 호스트가 집계하는 편이 깔끔하다) */
+function yardTrack(e, d){
+  try{
+    if(e==='rep' && d){
+      if(d.result==='succ') G.q.succ = (G.q.succ||0) + 1;
+      if(Array.isArray(d.tone) && d.tone[0] && d.tone[1] && d.tone[2]) G.q.tone = (G.q.tone||0) + 1;
+    }
+  }catch(x){}
+  track(e, d);
+}
+
+function ensureYardDog(){
+  if(yardDogEl) return;
+  yardDogEl = document.createElement('div');
+  yardDogEl.style.cssText = 'width:100%;height:100%';
+  try{ yardDog = createDogView(yardDogEl); }catch(e){ yardDog = null; }
+  if(yardDog){ yardDog.setStage(stageFor(G.learned.length)); yardDog.setCollar(G.collar); }
+}
+function ensureYardVoice(){
+  /* 음성은 «있으면 좋은 것»이다. 만들다 실패해도 훈련장은 제스처만으로 전부 돌아간다
+     (MASTER §3-9 기능 손실 없음). */
+  if(yardVoice) return yardVoice;
+  try{ yardVoice = createVoice({ lang:'ko-KR' }); }catch(e){ yardVoice = null; }
+  return yardVoice;
+}
+function closeYard(){
+  if(!yard || closingYard) return;
+  closingYard = true;
+  try{ yard.dispose(); }catch(e){}
+  yard = null; $('yard').innerHTML='';
+  closingYard = false;
+}
+function openYard(){
+  if(!yardUnlocked()) return toast('산책을 한 번 다녀오면 훈련장이 열려요');
+  ensureYardDog();
+  closeYard();
+  yardDog && yardDog.setStage(stageFor(G.learned.length));
+  yardDog && yardDog.setCollar(G.collar);
+  show('yard');
+  yard = createTrainingYard({
+    el: $('yard'),
+    G, save, track: yardTrack, J,
+    dogView: yardDog, dogEl: yardDogEl,
+    voice: ensureYardVoice(),
+    content: trainContent,
+    snd: yardSnd,
+    rng: () => (yardRng ? yardRng() : Math.random()),
+    /* ⚡·에너지 시트는 기존 앱 것을 그대로 쓴다 — 리소스 바 갱신·환급 정책이 한 곳에 남는다 */
+    enSpend: () => enSpend(),
+    openEnergy: () => openEnergy(),
+    goHome: () => { save(); show('home'); paintTop(); },
+    goPath: () => { save(); show('path'); },          // 거부 신호 «미학습» 견인 — 산책길로 보낸다
+  });
+  (G.tr.ftue||0) < 10 ? yard.openFtue() : yard.open();
+  track('yard_open', { ftue: G.tr.ftue||0 });
+  yardDog && yardDog.refit();
+}
+$('btnYard').onclick = openYard;
 
 /* ═══ 훈련 로직 ═══ */
 const ROUND = 5;
@@ -1075,9 +1339,14 @@ $('evExp').onclick = ()=>{
   }catch(e){ toast('내보내기에 실패했어요'); }
 };
 let rsArm = 0;   // confirm() 은 브라우저를 얼린다 — 두 번 누르기로 대신한다
+/* ★통합 QA 에서 잡힌 버그: location.reload() 는 pagehide 를 발생시키고,
+   그 핸들러의 save() 가 방금 지운 저장분을 그대로 되살려 «처음부터 다시 시작»이 먹지 않았다.
+   지우는 중임을 표시해 마지막 저장을 건너뛴다. */
+let wiping = false;
 $('rsBtn').onclick = ()=>{
   const now = Date.now();
   if(now - rsArm > 3000){ rsArm = now; return toast('정말 지우려면 3초 안에 한 번 더 누르세요'); }
+  wiping = true;
   try{ localStorage.removeItem(KEY); localStorage.removeItem(EVK); }catch(e){}
   location.reload();
 };
@@ -1097,7 +1366,7 @@ $('nmGo').onclick = ()=>{
   paintHome(); sndOk();
   say(`${J(G.name,'아','야')}, 우리 시작해 볼까?`, 3200);
 };
-addEventListener('pagehide', save);
+addEventListener('pagehide', ()=>{ if(!wiping) save(); });
 
 /* ═══ 부팅 ═══ */
 try{
@@ -1135,6 +1404,12 @@ try{
       save(); paintHome(); paintPath(); },
     give:o=>{ Object.assign(G,o); save(); paintTop(); if(cur==='home') paintHome(); },
     fx:()=>lastFx, ev:()=>EV,
+    /* 훈련장 QA 훅 */
+    tr:()=>G.tr, openYard, yard:()=>yard,
+    setRng:f=>{ yardRng = (typeof f==='function') ? f : null; },
+    /** 명령 숙련도를 바로 세워 둔다 — 해금·Lv3 수신호·마스터 경로 검증용 */
+    train:(cmd,m)=>{ G.tr.cmds[cmd] = G.tr.cmds[cmd] || {m:0,lv:0,tries:0,succ:0,masterHits:0};
+      G.tr.cmds[cmd].m = m; G.tr.cmds[cmd].lv = lvOf(m); save(); paintHome(); },
   };
   setInterval(()=>{ if(enRegen()){ paintTop(['Energy']); if(cur==='home') paintHome(); } }, 15000);
   if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
