@@ -1125,7 +1125,7 @@ try{
     else say('기다리고 있었어!');
   }, 500);
   window.__MM__ = {
-    state:()=>G, path:()=>PATH, go:show,
+    state:()=>G, path:()=>PATH, go:show, homeDog:()=>homeDog,
     reset:()=>{ try{localStorage.removeItem(KEY)}catch(e){} location.reload(); },
     grant:n=>{ G.learned = SIGNALS.slice(0,n).map(s=>s.id); save(); paintHome(); paintDex(); },
     /** 앞의 노드 n개를 끝낸 것으로 친다 — 잠금 규칙 테스트용 */

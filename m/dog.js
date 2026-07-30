@@ -1,89 +1,151 @@
-/* 멍스쿨 모바일 — 강아지 뷰 (벡터)
-   ★3D 리그를 걷어내고 SVG 벡터로 교체했다. 이유:
-     · 참고 원화가 «플랫 컬러 + 굵은 검정 라인»이라 벡터가 원본에 가장 가깝다
-     · 어떤 해상도에서도 선이 뭉개지지 않는다
-     · three.js 1.3MB 의존이 사라진다 — WebGL 없는 기기에서도 그대로 뜬다
-     · 표정·성장·견종·목줄이 전부 파라미터라 한계비용이 여전히 0이다
-   ★성능 규칙: SVG 문자열을 매 프레임 다시 만들지 않는다.
-     표정이 «바뀔 때만» 다시 그리고, 숨쉬기·들썩임은 CSS 애니메이션에 맡긴다. */
+/* 멍스쿨 모바일 — 강아지 뷰 (원화 이미지 합성)
+   ★허파랑이 준 원화를 그대로 쓴다. 벡터로 다시 그리지 않는다.
+     · face_atlas.webp — 표정 10종 5×2. 초록 배경 키잉 + despill 후,
+       «아래 45%(주둥이·턱)의 폭»을 기준으로 크기를 정규화하고 턱을 셀 하단에 맞췄다.
+       (귀는 표정마다 달라 정렬 기준이 될 수 없다)
+     · body.webp — 전신 원화에서 머리를 지운 몸통. 꼬리는 살렸다.
+   ★성능: 매 프레임 다시 그리지 않는다. 표정은 background-position 교체,
+     숨쉬기·들썩임은 CSS 애니메이션(GPU). */
 
-import { dogSVG, NEUTRAL, STAGES, stageFor, measure } from './pup.js';
-export { STAGES, stageFor, measure };
+const A = './face_atlas.webp', B = './body.webp';
+const CELL = 420, COLS = 5, ROWS = 2;
+const FACE_IDS = ['relaxed','curious','lipLick','yawn','lookAway',
+                  'whaleEye','earsBack','snarl','joy','panting'];
+/* 원화의 머리 위치를 그대로 재현하는 앵커 (몸통 크기에 대한 비율) */
+const HEAD_CX = 0.22, HEAD_CHIN = 0.46, FACE_W = 0.80;
+const BODY_AR = 431 / 612;          // 몸통 원본 종횡비
+const CHIN_IN_CELL = 386 / CELL;    // 셀 안에서 턱의 세로 위치
 
-/* ★상점은 목줄을 «키»로 넘긴다('mint'). 헥스로 착각해 그대로 fill 에 넣으면 검게 칠해진다. */
 export const COLLARS = { mint:'#2AB7A9', red:'#E74C3C', yellow:'#F3B13E', blue:'#4A90D9' };
 const collarHex = v => (typeof v === 'string' && v[0] === '#') ? v : (COLLARS[v] || COLLARS.mint);
 
-let styleInjected = false;
+export const STAGES = [
+  { key:'pup',   name:'아기',   head:1.22, size:0.86, ratio:1.80 },
+  { key:'teen',  name:'청소년', head:1.00, size:1.00, ratio:1.94 },
+  { key:'adult', name:'성견',   head:0.86, size:1.14, ratio:2.10 },
+];
+export const stageFor = learned => learned >= 8 ? STAGES[2] : learned >= 4 ? STAGES[1] : STAGES[0];
+
+let styled = false;
 function injectStyle() {
-  if (styleInjected) return;
-  styleInjected = true;
+  if (styled) return; styled = true;
   const s = document.createElement('style');
   s.textContent = `
-    .mm-dog{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
-    .mm-dog svg{width:100%;height:100%;overflow:visible;
-      animation:mmBreathe 3.4s ease-in-out infinite;transform-origin:50% 88%}
-    .mm-dog.excited svg{animation:mmBounce .5s cubic-bezier(.3,1.5,.4,1) 1, mmBreathe 3.4s ease-in-out infinite .5s}
-    @keyframes mmBreathe{0%,100%{transform:scale(1,1)}50%{transform:scale(1.012,0.99)}}
-    @keyframes mmBounce{0%{transform:translateY(0) scale(1,1)}
-      30%{transform:translateY(-7%) scale(0.97,1.05)}
-      60%{transform:translateY(0) scale(1.05,0.95)}
-      100%{transform:translateY(0) scale(1,1)}}
-    @media (prefers-reduced-motion: reduce){.mm-dog svg{animation:none}}`;
+  .mm-dog{position:relative;width:100%;height:100%;overflow:visible}
+  .mm-stage{position:absolute;left:50%;top:50%;transform-origin:50% 92%;
+    animation:mmBreathe 3.6s ease-in-out infinite}
+  .mm-stage.excited{animation:mmPop .52s cubic-bezier(.3,1.6,.4,1) 1, mmBreathe 3.6s ease-in-out infinite .52s}
+  .mm-body{position:absolute;background:url(${B}) center/100% 100% no-repeat}
+  .mm-collar{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible}
+  .mm-face{position:absolute;background-image:url(${A});background-repeat:no-repeat;
+    transform-origin:50% 100%;transition:opacity .18s linear}
+  .mm-face.ghost{opacity:0}
+  @keyframes mmBreathe{0%,100%{transform:translate(-50%,-50%) scale(1,1)}
+                       50%{transform:translate(-50%,-50%) scale(1.014,.988)}}
+  @keyframes mmPop{0%{transform:translate(-50%,-50%) scale(1,1)}
+    28%{transform:translate(-50%,-53%) scale(.96,1.06)}
+    62%{transform:translate(-50%,-50%) scale(1.05,.95)}
+    100%{transform:translate(-50%,-50%) scale(1,1)}}
+  @media (prefers-reduced-motion: reduce){.mm-stage,.mm-stage.excited{animation:none}}`;
   document.head.appendChild(s);
 }
 
-/** el = 컨테이너(div). 캔버스가 아니다. */
 export function createDogView(el) {
   if (!el) throw new Error('createDogView: 컨테이너가 없습니다');
   injectStyle();
   el.classList.add('mm-dog');
+  el.innerHTML = `<div class="mm-stage">
+      <div class="mm-body"></div>
+      <svg class="mm-collar" viewBox="0 0 100 100" preserveAspectRatio="none"><g></g></svg>
+      <div class="mm-face base"></div>
+      <div class="mm-face top"></div>
+    </div>`;
+  const stage = el.querySelector('.mm-stage');
+  const collarG = el.querySelector('.mm-collar g');
+  const faceBase = el.querySelector('.mm-face.base');
+  const faceTop = el.querySelector('.mm-face.top');
 
-  const state = { stage: STAGES[0], collar: '#2AB7A9', pose: null, ex: 1, t: 0, blink: false };
-  let raf = 0, blinkTimer = 0, last = 0;
+  const st = { stage: STAGES[0], collar: COLLARS.mint, face: 'relaxed', ex: 1 };
+  let ro = null;
 
-  function params() {
-    const p = state.pose ? state.pose(state.t, state.ex) : {};
-    const o = Object.assign({}, NEUTRAL, p);
-    // 눈 깜빡임 — 반달눈(웃음·하품)일 때는 건너뛴다
-    if (state.blink && !(o.eyeCrescent > 0.5)) o.eyeOpen = 0;
-    return o;
+  function cellPos(id, cw) {
+    const i = Math.max(0, FACE_IDS.indexOf(id));
+    const k = cw / CELL;
+    return { size: `${COLS * cw}px ${ROWS * cw}px`,
+             pos: `${-(i % COLS) * cw}px ${-Math.floor(i / COLS) * cw}px`, k };
   }
-  function render() {
-    el.innerHTML = dogSVG(params(), { stage: state.stage, collar: state.collar, size: 400 });
-  }
-  render();
 
-  /* 깜빡임 — 3~6초에 한 번, 120ms. 이것만으로 «살아 있다»는 느낌이 크게 오른다. */
-  function scheduleBlink() {
-    blinkTimer = setTimeout(() => {
-      state.blink = true; render();
-      setTimeout(() => { state.blink = false; render(); scheduleBlink(); }, 120);
-    }, 3000 + Math.random() * 3000);
-  }
-  scheduleBlink();
+  const MAX_SIZE = 1.14;   // STAGES 중 가장 큰 size — 이걸 1로 정규화해야 성견이 안 넘친다
 
-  /* 포즈 함수가 시간에 반응하는 경우(혀 놀림 등)를 위해 저속으로 갱신 */
-  function loop(now) {
-    raf = requestAnimationFrame(loop);
-    if (now - last < 220) return;               // ≈4.5fps — 문자열 재생성 비용을 억제
-    last = now; state.t += 0.22;
-    if (state.pose && state.pose.length >= 1) render();
+  function layout() {
+    const W = el.clientWidth || 260, H = el.clientHeight || 320;
+    /* ★머리는 몸통 왼쪽으로 튀어나온다. 그 양(leftOver)을 폭 계산에 넣지 않으면 잘린다. */
+    const cpb = 1.4 * FACE_W * st.stage.head;                       // cellW / bodyW
+    const leftOver  = Math.max(0, cpb / 2 - HEAD_CX);
+    const rightOver = Math.max(0, HEAD_CX + cpb / 2 - 1);
+    const above     = Math.max(0, cpb * CHIN_IN_CELL - HEAD_CHIN * BODY_AR);
+    const totalW = leftOver + 1 + rightOver, totalH = BODY_AR + above;
+    const bw = Math.min(W / totalW, H / totalH) * 0.96 * (st.stage.size / MAX_SIZE);
+    const bh = bw * BODY_AR, cw = cpb * bw;
+    const ox = leftOver * bw, oy = above * bw;
+
+    stage.style.width  = totalW * bw + 'px';
+    stage.style.height = totalH * bw + 'px';
+    const body = el.querySelector('.mm-body');
+    body.style.left = ox + 'px'; body.style.top = oy + 'px';
+    body.style.width = bw + 'px'; body.style.height = bh + 'px';
+
+    faceBase.style.width = faceTop.style.width = cw + 'px';
+    faceBase.style.height = faceTop.style.height = cw + 'px';
+    const fl = ox + HEAD_CX * bw - cw / 2, ft = oy + HEAD_CHIN * bh - cw * CHIN_IN_CELL;
+    for (const f of [faceBase, faceTop]) { f.style.left = fl + 'px'; f.style.top = ft + 'px'; }
+    paintFaces(cw);
+
+    // 목줄 — 머리와 몸통이 만나는 자리. 턱에 일부 가려지는 게 자연스럽다
+    const sw = totalW * bw, sh = totalH * bw;
+    const nx = (ox + (HEAD_CX + 0.06) * bw) / sw * 100, ny = (oy + (HEAD_CHIN - 0.02) * bh) / sh * 100;
+    const rx = bw / sw * 15, ry = bh / sh * 11;
+    collarG.innerHTML =
+      `<path d="M ${nx - rx} ${ny - ry * 0.4} Q ${nx} ${ny + ry * 0.85} ${nx + rx} ${ny - ry * 0.55}
+                L ${nx + rx * 0.94} ${ny - ry * 1.2} Q ${nx} ${ny + ry * 0.2} ${nx - rx * 0.94} ${ny - ry}  Z"
+         fill="${st.collar}" stroke="#000" stroke-width="1.6" stroke-linejoin="round"
+         vector-effect="non-scaling-stroke"/>
+       <ellipse cx="${nx}" cy="${ny + ry * 0.8}" rx="${rx * 0.24}" ry="${ry * 0.32}" fill="#FFCB57"
+         stroke="#000" stroke-width="1.4" vector-effect="non-scaling-stroke"/>`;
   }
-  raf = requestAnimationFrame(loop);
+
+  /* 과장 감쇠: 표정 원화는 10장뿐이라 «강도»를 그릴 수 없다.
+     대신 기준 표정(편안함) 위에 목표 표정을 겹치고 불투명도를 낮춰 신호를 옅게 만든다.
+     ex=1 이면 목표 표정만, ex 가 낮을수록 편안한 얼굴에 가까워진다. */
+  function paintFaces(cwArg) {
+    const cw = cwArg != null ? cwArg : parseFloat(faceTop.style.width) || CELL;
+    const base = cellPos('relaxed', cw), top = cellPos(st.face, cw);
+    faceBase.style.backgroundSize = base.size; faceBase.style.backgroundPosition = base.pos;
+    faceTop.style.backgroundSize = top.size;   faceTop.style.backgroundPosition = top.pos;
+    const sameAsBase = st.face === 'relaxed';
+    faceBase.style.opacity = sameAsBase ? 1 : 1;
+    faceTop.style.opacity = sameAsBase ? 1 : (0.55 + 0.45 * Math.max(0, Math.min(1, st.ex)));
+  }
+
+  layout();
+  if ('ResizeObserver' in window) { ro = new ResizeObserver(layout); ro.observe(el); }
+  else addEventListener('resize', layout);
 
   return {
-    setStage(s) { if (!s) return; state.stage = s; render(); },
-    setCollar(v) { if (!v) return; state.collar = collarHex(v); render(); },
-    setYaw() {},                                 // 벡터에는 요가 없다 — 호출부 호환용
-    stage: () => state.stage,
-    /** pose: (t, ex) => 얼굴 파라미터 · ex: 과장 계수 1→0 */
+    setStage(s) { if (!s) return; st.stage = s; layout(); },
+    setCollar(v) { if (!v) return; st.collar = collarHex(v); layout(); },
+    setYaw() {},
+    stage: () => st.stage,
+    /** pose: (t, ex) => { face, ex } */
     play(pose, ex) {
-      state.pose = pose; state.ex = (ex == null ? 1 : ex); state.t = 0; render();
-      el.classList.remove('excited'); void el.offsetWidth; el.classList.add('excited');
+      const e = (ex == null ? 1 : ex);
+      let f = 'relaxed';
+      try { const r = pose && pose(0, e); if (r && r.face) f = r.face; } catch (err) {}
+      st.face = f; st.ex = e; paintFaces();
+      stage.classList.remove('excited'); void stage.offsetWidth; stage.classList.add('excited');
     },
-    idle() { state.pose = null; state.ex = 1; el.classList.remove('excited'); render(); },
-    refit() {},                                  // SVG 는 컨테이너에 맞춰 알아서 늘어난다
-    dispose() { cancelAnimationFrame(raf); clearTimeout(blinkTimer); el.innerHTML = ''; },
+    idle() { st.face = 'relaxed'; st.ex = 1; stage.classList.remove('excited'); paintFaces(); },
+    refit: layout,
+    dispose() { if (ro) ro.disconnect(); el.innerHTML = ''; },
   };
 }
