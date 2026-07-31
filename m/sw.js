@@ -1,6 +1,6 @@
 /* 멍스쿨 모바일 SW — 네트워크 우선(배포 즉시 반영), 실패 시 캐시(오프라인).
    ★캐시 우선으로 바꾸지 말 것: 라이브 md5 검증 사이클이 낡은 캐시에 속는다. */
-const C = 'mungschool-m-v6';
+const C = 'mungschool-m-v7';
 const CORE = ['./','./index.html','./dog.js','./signals.js','./course.js','./manifest.json',
               './face_atlas.webp','./body.webp',
               /* 훈련장 (v0.7) */

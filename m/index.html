@@ -1544,9 +1544,15 @@ function startIntro(preview){
   track('intro_start', { preview:pv });
   paintIntro();
 }
-/** 미리보기 종료 — 들어올 때의 저장분을 그대로 되돌린다 */
+/** 미리보기 종료 — 들어올 때의 저장분을 그대로 되돌린다.
+    ★단 ⚡는 예외다. 에너지는 «벽시계»로 회복되는 값이라 되돌리면 회복 시계가
+      과거로 점프한다 — 미리보기를 봤다고 회복이 늦어지면 안 된다.
+      미리보기 중에는 ⚡를 쓰지 않으므로 지금 값을 그대로 들고 나간다. */
 function endPreview(){
-  if(introSnap){ try{ G = JSON.parse(introSnap); }catch(e){} introSnap=null; }
+  if(introSnap){
+    try{ const now=G; G=JSON.parse(introSnap); G.en=now.en; G.enT=now.enT; }catch(e){}
+    introSnap=null;
+  }
   save(); paintTop(); show('home');
 }
 function paintIntro(){
