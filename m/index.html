@@ -254,49 +254,6 @@
   #tstage{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;position:relative}
   #trainCv{width:min(260px,64vw);height:100%;max-height:36vh}
   #ask{text-align:center;font-size:16px;font-weight:1000;letter-spacing:-.4px;padding:2px 16px 10px}
-  /* 상황 카드 — 그림 위에 놓아 «먼저 읽고 그림을 보게» 한다 */
-  #ctx{margin:2px 12px 0;padding:11px 13px;border-radius:14px;background:rgba(255,201,107,.20);
-       border:1.5px solid rgba(224,162,26,.30);font-size:13.5px;line-height:1.55;font-weight:700;
-       display:flex;gap:8px;align-items:flex-start}
-  #ctx em{font-style:normal;flex:none;font-size:15px}
-  .row.ctxw{background:rgba(62,194,162,.10);box-shadow:none;border:1.5px solid rgba(62,194,162,.26)}
-  .row.ctxw b{color:var(--mint-d)}
-
-  /* ═══ 오답 노트 ═══ */
-  #noteCard{width:100%;display:flex;align-items:center;gap:11px;margin-top:11px;padding:13px 14px;
-    border:0;border-radius:16px;background:#fff;box-shadow:0 3px 12px rgba(60,110,95,.11);text-align:left}
-  #noteCard em{font-style:normal;font-size:24px;flex:none}
-  #noteCard span{flex:1;min-width:0}
-  #noteCard b{display:block;font-size:14.5px;font-weight:1000;letter-spacing:-.3px}
-  #noteCard small{display:block;font-size:11.5px;color:var(--sub);font-weight:700;margin-top:2px}
-  #noteCard i{font-style:normal;color:#B9CCC4;font-size:20px;flex:none}
-  #noteCard:active{transform:translateY(1px)}
-  #note{background:linear-gradient(#F2F9F5,#FFF8EE);overflow:hidden}
-  #nTitle{flex:1;text-align:center;font-size:16px;font-weight:1000;letter-spacing:-.4px;margin-right:38px}
-  #nSum{padding:2px 0 4px;font-size:12.5px;font-weight:800;color:var(--sub)}
-  .nItem{background:#fff;border-radius:16px;padding:14px;margin-top:10px;box-shadow:0 3px 10px rgba(60,110,95,.1)}
-  .nTop{display:flex;align-items:center;gap:9px}
-  .nTop em{font-style:normal;font-size:26px}
-  .nTop b{font-size:15.5px;font-weight:1000;letter-spacing:-.3px}
-  .nTop i{margin-left:auto;font-style:normal;padding:5px 10px;border-radius:999px;font-size:11px;font-weight:900}
-  .nWrong{margin-top:9px;display:grid;gap:6px}
-  .nWrong div{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:800;
-    background:rgba(255,201,107,.20);border-radius:11px;padding:8px 11px}
-  .nWrong div span{margin-left:auto;color:#B07A0C;font-weight:1000}
-  .nDue{margin-top:9px;font-size:11.5px;font-weight:900;color:var(--mint-d)}
-  #nEmpty{margin-top:16px;text-align:center;font-size:13px;color:var(--sub);font-weight:700;line-height:1.7}
-  /* 나란히 비교 — 혼동 해설의 시각판 */
-  #dshCmp{margin-top:11px}
-  #dshCmp h4{font-size:11px;font-weight:900;color:var(--mint-d);letter-spacing:.3px;margin-bottom:6px}
-  .cmpRow{display:flex;gap:8px;align-items:stretch;background:#fff;border-radius:14px;padding:10px;
-    margin-top:7px;box-shadow:0 2px 8px rgba(60,110,95,.07)}
-  .cmpFace{flex:none;width:74px;height:74px;border-radius:12px;background:#F2F9F5;
-    background-size:500% 200%;background-repeat:no-repeat}
-  .cmpTxt{flex:1;min-width:0;font-size:12px;line-height:1.55;font-weight:700}
-  .cmpTxt b{display:block;font-size:12.5px;font-weight:1000;margin-bottom:2px}
-  #dshSrc{margin-top:9px;font-size:10.5px;color:var(--sub);font-weight:700;text-align:right}
-  #ishSafe{margin-top:10px;padding:11px 13px;border-radius:14px;background:rgba(255,122,107,.10);
-    border:1.5px solid rgba(255,122,107,.28);font-size:12px;line-height:1.6;font-weight:700;color:#9C3B2E}
   #opts{padding:0 12px calc(var(--sb) + 12px);display:grid;gap:9px}
   .opt{width:100%;min-height:56px;border:2px solid var(--line);border-radius:16px;background:#fff;
        color:var(--ink);font-size:14.5px;font-weight:800;padding:10px 14px;text-align:left;
@@ -323,83 +280,6 @@
   .row b{display:block;font-size:11px;font-weight:900;color:var(--mint-d);letter-spacing:.3px}
   .row p{margin-top:3px;font-size:13.5px;line-height:1.65}
   .row.todo{background:rgba(62,194,162,.11);box-shadow:none}
-  /* ★오답 특정 피드백 — 시트에서 가장 먼저, 가장 눈에 띄게 (말해보카 §2) */
-  .row.why{background:rgba(255,201,107,.20);box-shadow:none;border:1.5px solid rgba(224,162,26,.34)}
-  .row.why b{color:#B07A0C}
-  #fbSrc{margin-top:10px;font-size:10.5px;line-height:1.5;color:var(--sub);font-weight:700;text-align:right}
-  /* 복습 예고 — 시트 최상단의 알약 배지 (말해보카의 «6년 뒤 복습» 자리) */
-  #fbAgain{display:none;margin-top:9px;padding:7px 13px;border-radius:999px;font-size:11.5px;font-weight:900;
-           background:rgba(62,194,162,.18);color:var(--mint-d);text-align:center;
-           border:1.5px solid rgba(62,194,162,.32)}
-  #fbAgain.on{display:block}
-  /* 액션 행 — 아이콘 4개. 시트가 길어지지 않게 한 줄로 */
-  #fbAct{display:flex;gap:2px;margin-top:13px;padding-top:12px;border-top:1.5px solid rgba(60,110,95,.10)}
-  #fbAct button{flex:1;min-width:0;border:0;background:transparent;padding:4px 2px;position:relative}
-  #fbAct em{display:block;font-style:normal;font-size:21px;line-height:1.25}
-  #fbAct span{display:block;font-size:10.5px;font-weight:800;color:var(--sub);margin-top:2px;
-              white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  #fbAct button:active{transform:translateY(1px)}
-  #fbAct button.off{opacity:.35}
-  #fbActN{position:absolute;top:0;right:calc(50% - 22px);min-width:16px;height:16px;padding:0 4px;
-          border-radius:999px;background:var(--coral);color:#fff;font-style:normal;font-size:10px;
-          font-weight:900;line-height:16px;display:none}
-  #fbActN.on{display:block}
-  #fbAlt{display:none;margin-top:10px;padding:12px 14px;border-radius:14px;background:#fff;
-         box-shadow:0 2px 8px rgba(60,110,95,.07)}
-  #fbAlt.on{display:block}
-  #fbAlt b{display:block;font-size:11px;font-weight:900;color:var(--mint-d);letter-spacing:.3px}
-  #fbAlt div{margin-top:7px;font-size:12.5px;line-height:1.6;font-weight:700}
-  #fbAlt div span{display:inline-block;margin-right:6px;padding:2px 8px;border-radius:999px;
-                  font-size:10.5px;font-weight:900}
-  /* 처음 만나는 항목 표시 (말해보카의 «New» 배지) */
-  #ctxNew{margin-left:auto;flex:none;padding:3px 9px;border-radius:999px;background:var(--coral);
-          color:#fff;font-size:10px;font-weight:900;display:none}
-  #ctxNew.on{display:block}
-  /* 오답 노트 카드의 숫자 배지 */
-  #noteN{flex:none;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--coral);
-         color:#fff;font-size:11px;font-weight:900;line-height:20px;text-align:center;display:none}
-  #noteN.on{display:block}
-
-  /* ═══ 첫 실행 진단 (말해보카 FTUE 이식) ═══ */
-  #intro{background:linear-gradient(#FFF8EE,#F2F9F5);overflow-y:auto;-webkit-overflow-scrolling:touch}
-  #inTop{display:flex;align-items:center;gap:10px;padding:calc(var(--st) + 8px) 14px 6px}
-  #inProg{flex:1;height:9px;border-radius:999px;background:rgba(60,110,95,.13);overflow:hidden}
-  #inProg i{display:block;height:100%;width:0;border-radius:999px;
-            background:linear-gradient(90deg,#6DD6BB,#1E8C74);transition:width .45s cubic-bezier(.3,.9,.3,1)}
-  #inSkip{border:0;background:transparent;color:var(--sub);font-size:12px;font-weight:800;padding:6px 4px}
-  #inBody{flex:1;display:flex;flex-direction:column;padding:6px 16px calc(var(--sb) + 14px);
-          max-width:520px;margin:0 auto;width:100%;min-height:0}
-  #inSay{display:flex;gap:10px;align-items:flex-start;margin-top:10px}
-  #inSay em{font-style:normal;font-size:34px;line-height:1;flex:none}
-  #inSay p{flex:1;background:#fff;border-radius:16px 16px 16px 4px;padding:12px 14px;
-           font-size:14.5px;line-height:1.6;font-weight:700;box-shadow:0 3px 10px rgba(60,110,95,.1)}
-  #inSay p b{color:var(--mint-d);font-weight:1000}
-  #inStage{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;position:relative}
-  #introCv{width:100%;height:100%}
-  #inAsk{text-align:center;font-size:17px;font-weight:1000;letter-spacing:-.4px;padding:4px 6px 10px}
-  #inOpts{display:grid;gap:9px}
-  /* 카드형 단계에서도 CTA 는 화면 아래에 붙는다 — 엄지가 닿는 자리 */
-  #inNext{width:100%;min-height:54px;margin-top:auto;padding-top:0;border:0;border-radius:16px;
-          background:linear-gradient(140deg,#6DD6BB,#1E8C74);color:#fff;font-size:16px;font-weight:1000;
-          box-shadow:0 5px 0 #17715E}
-  #inNext:disabled{opacity:.4;box-shadow:0 5px 0 rgba(23,113,94,.4)}
-  #inNext:active:not(:disabled){transform:translateY(3px);box-shadow:0 2px 0 #17715E}
-  /* ?? 티저 카드 — 호기심 갭 (말해보카 §1 0:40) */
-  .tzc{background:#fff;border-radius:20px;padding:16px;margin-top:12px;box-shadow:0 4px 14px rgba(60,110,95,.12)}
-  .tzc .tzh{display:flex;align-items:center;gap:8px;font-size:15.5px;font-weight:1000;letter-spacing:-.4px}
-  .tzc .tzh span{margin-left:auto;font-size:11px;font-weight:900;color:var(--sub)}
-  .tzr{display:flex;gap:9px;margin-top:12px}
-  .tzb{flex:1;border-radius:14px;padding:13px 8px;text-align:center;background:rgba(62,194,162,.12)}
-  .tzb b{display:block;font-size:25px;font-weight:1000;color:var(--mint-d);letter-spacing:-1px}
-  .tzb small{display:block;font-size:10.5px;color:var(--sub);font-weight:800;margin-top:3px}
-  .tzl{margin-top:11px;display:grid;gap:6px}
-  .tzl div{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:800;color:var(--sub);
-           background:rgba(60,110,95,.06);border-radius:11px;padding:9px 11px}
-  #inWhy{margin-top:10px;padding:12px 14px;border-radius:14px;display:none;
-         background:rgba(255,201,107,.20);border:1.5px solid rgba(224,162,26,.34)}
-  #inWhy.on{display:block}
-  #inWhy b{display:block;font-size:11px;font-weight:900;color:#B07A0C;letter-spacing:.3px}
-  #inWhy p{margin-top:3px;font-size:13px;line-height:1.6}
   #fbGo,.shGo{width:100%;min-height:54px;margin-top:15px;border:0;border-radius:16px;
         background:linear-gradient(140deg,#6DD6BB,#1E8C74);color:#fff;font-size:16px;font-weight:1000;
         box-shadow:0 5px 0 #17715E}
@@ -508,8 +388,6 @@
 <section class="scr tabbed" id="dex"><div class="sc"><div class="pad">
   <div class="dhead"><b>신호 도감</b><small id="dexCount">0 / 10 수집</small></div>
   <div style="font-size:12px;font-weight:700;color:var(--sub)">훈련에서 읽어낸 신호가 여기에 모입니다</div>
-  <!-- ★오답 노트 진입 — 탭을 늘리지 않고 도감 위에 둔다 -->
-  <button id="noteCard"><em>📓</em><span><b>오답 노트</b><small id="noteSub">아직 쌓인 게 없어요</small></span><i id="noteN"></i><i>›</i></button>
   <div id="dexGrid"></div>
   <div class="sect" id="dexSkillHead"><h3>기술</h3><span id="dexSkillCount">0 / 6</span></div>
   <div id="dexSkills"></div>
@@ -540,8 +418,6 @@
     <div id="exBadge">과장 100% · 크게 보여 줍니다</div>
     <div id="combo">🔥 연속 2</div>
   </div>
-  <!-- ★상황 한 줄 — 같은 그림이라도 상황이 다르면 답이 다르다 -->
-  <div id="ctx"><em>📍</em><span></span><i id="ctxNew">처음</i></div>
   <div id="tstage"><div id="trainCv"></div></div>
   <div id="ask">지금 멍이는 어떤 상태일까요?</div>
   <div id="opts"></div>
@@ -549,34 +425,6 @@
 
 <!-- ══ 훈련장 ══ 명령을 «보내는» 법을 배우는 마당. 내부는 train.js 가 통째로 그린다 -->
 <section class="scr full" id="yard"></section>
-
-<!-- ══ 오답 노트 ══ «내가 어떤 신호를 무엇으로 잘못 읽는가»를 돌려준다.
-     말해보카의 오답 노트를 가져오되, «내가 틀린 방식»을 집계하는 건 우리 것이다. -->
-<section class="scr full" id="note">
-  <div class="thead"><button class="back" id="nBack">←</button><div id="nTitle">오답 노트</div></div>
-  <div class="sc"><div class="pad">
-    <div id="nSum"></div>
-    <div id="nList"></div>
-    <div id="nEmpty"></div>
-  </div></div>
-</section>
-
-<!-- ══ 첫 실행 진단 ══ 말해보카 FTUE 이식: 설문2 → ??% 티저 → 각본된 첫 승리 → 진단 5문제 → 결과 → 이름 짓기 -->
-<section class="scr full" id="intro">
-  <div id="inTop">
-    <div id="inProg"><i id="inProgFill"></i></div>
-    <button id="inSkip">건너뛰기</button>
-  </div>
-  <div id="inBody">
-    <div id="inSay"><em id="inFace">🐶</em><p id="inMsg"></p></div>
-    <div id="inStage"><div id="introCv"></div></div>
-    <div id="inAsk"></div>
-    <div id="inWhy"><b>왜 그렇게 보였을까요</b><p id="inWhyP"></p></div>
-    <div id="inOpts"></div>
-    <div id="inCard"></div>
-    <button id="inNext">시작하기</button>
-  </div>
-</section>
 
 <!-- ══ 결과 ══ -->
 <section class="scr full" id="res"><div class="rw">
@@ -603,36 +451,11 @@
 <!-- 피드백 시트 -->
 <div class="sheet" id="fb"><div class="sheetc">
   <div id="fbTop"><span id="fbIcon">✅</span><span id="fbTitle">정답</span><span id="fbTier">주의</span></div>
-  <!-- ★복습 예고를 시트 «맨 위»로 — 말해보카가 문제 카드 우상단에 «6년 뒤 복습»을 붙이는 자리 -->
-  <div id="fbAgain">🔁 다음 산책에서 다시 나와요</div>
   <div id="fbXp">+10 XP</div>
-  <!-- ★오답 특정 피드백. 정답을 알려주기 «전»에 온다 — 학습은 오답 순간에 일어난다 -->
-  <div class="row why" id="fbWhyRow" style="display:none"><b>왜 그렇게 보였을까요</b><p id="fbWhy"></p></div>
-  <!-- ★상황 해설 — 같은 얼굴이라도 상황이 뜻을 바꾼다는 것을 매번 되짚는다 -->
-  <div class="row ctxw" id="fbCtxRow" style="display:none"><b>이 상황에서는</b><p id="fbCtx"></p></div>
   <div class="row"><b>무엇이 보였나요</b><p id="fbSee"></p></div>
   <div class="row"><b>무슨 뜻인가요</b><p id="fbMean"></p></div>
   <div class="row todo"><b>사람은 무엇을 해야 하나요</b><p id="fbTodo"></p></div>
-  <div id="fbSrc"></div>
-  <!-- ★액션 행 — 말해보카 정답 화면의 «다른 예문 · 오답 노트 · 단어 정보» 자리.
-       지금까지 만든 기능들(다른 상황·오답 노트·도감·나란히 비교)의 진입점을 여기 모은다. -->
-  <div id="fbAct">
-    <button data-a="alt"><em>🔀</em><span>다른 상황</span></button>
-    <button data-a="note"><em>📓</em><span>오답 노트</span><i id="fbActN"></i></button>
-    <button data-a="dex"><em>📖</em><span>신호 정보</span></button>
-    <button data-a="cmp"><em>⚖️</em><span>나란히 비교</span></button>
-  </div>
-  <div id="fbAlt"></div>
   <button id="fbGo">다음</button>
-</div></div>
-
-<!-- 이탈 방어 시트 — 뒤로가기를 눌렀을 때. 브라우저 기본 대화상자 금지 규칙에 맞춘 자체 시트 -->
-<div class="sheet" id="lvsh"><div class="sheetc">
-  <div class="shTop"><span class="shIcon">🐶</span><span class="shTitle" id="lvTitle">지금 나가시겠어요?</span></div>
-  <div class="row"><b>남은 만큼</b><p id="lvBody"></p></div>
-  <button class="shGo" id="lvStay">계속할게요</button>
-  <button id="lvOut" style="width:100%;min-height:48px;margin-top:9px;border:0;border-radius:16px;
-    background:transparent;color:var(--sub);font-size:14px;font-weight:800">그래도 나갈래요</button>
 </div></div>
 
 <!-- 도감 상세 시트 -->
@@ -641,9 +464,6 @@
   <div class="row"><b>무엇이 보이나요</b><p id="dshSee"></p></div>
   <div class="row"><b>무슨 뜻인가요</b><p id="dshMean"></p></div>
   <div class="row todo"><b>사람은 무엇을 해야 하나요</b><p id="dshTodo"></p></div>
-  <!-- ★나란히 비교 — 혼동 해설 문장의 시각판. 두 얼굴을 붙여 놓는 게 문장보다 빠르다 -->
-  <div id="dshCmp"></div>
-  <div id="dshSrc"></div>
   <button class="shGo" id="dshGo">닫기</button>
 </div></div>
 
@@ -670,8 +490,6 @@
 <div class="sheet" id="ish"><div class="sheetc">
   <div class="shTop"><span class="shIcon">🐕</span><span class="shTitle">멍스쿨</span></div>
   <div class="row"><b>이 앱은</b><p id="ishAbout">실제 개 없이, 강아지가 보내는 신호를 읽는 법을 연습하는 앱이에요.</p></div>
-  <!-- 안전 고지 — 지금까지 없었다. 행동 지시를 하는 앱에는 반드시 있어야 한다 -->
-  <div id="ishSafe"></div>
   <button class="shGo" id="muteBtn" style="background:#fff;color:#4a6d64;box-shadow:0 3px 10px rgba(60,110,95,.1)">🔊 소리 켜짐</button>
   <button class="shGo" id="evExp" style="background:#fff;color:#4a6d64;box-shadow:0 3px 10px rgba(60,110,95,.1)">📤 학습 기록 내보내기</button>
   <button class="shGo" id="rsBtn" style="background:#fff;color:#C0392B;box-shadow:0 3px 10px rgba(60,110,95,.1)">처음부터 다시 시작</button>
@@ -712,26 +530,6 @@ import { UNITS, PATH, currentIndex, poolFor, exFor, QUESTS,
 import { createTrainingYard, extraSounds, unlockedOf, lvOf } from './train.js';
 import * as trainContent from './content-for-A.js';
 import { createVoice } from './voice.js';
-/* ═══ 말해보카 이식 (00_공통/말해보카_FTUE_정밀분석.md) ═══
-   §2 «오답이 콘텐츠다» — 정답만 알려주는 피드백은 학습이 아니다.
-   내가 «왜 그 오답을 그럴듯하다고 봤는지»를 짚어 주는 문장 30개가 content.js 에 이미 있다.
-   §3-6 출처 표기 — 근거 있는 문장만 화면에 올린다 (정부지원 서류의 증거 원칙과 같은 규칙). */
-import { confusionFor, confusableWith, SIGNAL_SOURCE, fill as cfill } from './content.js';
-/* ═══ 맥락(상황) 축 — 기획서 v2 §2 ═══
-   말해보카는 어휘 5,000개라 간격 반복이 돈다. 우리는 신호가 10개다.
-   확장 축은 «새 신호»가 아니라 «상황»이다 — 아트 0장으로 항목이 3배가 되고,
-   동시에 «졸리지 않은데 하는 하품»처럼 정지 그림으로 표현 불가능한 정의를 살려낸다. */
-import { ITEMS, itemsOf, NOT_SIGNAL, CONFUSION_EXT, isExclusive,
-         BOX, BOX_MAX, nextDue, DISCLAIMER } from './context.js';
-
-/** content.js 30문장 + context.js 20문장을 하나로 본다 (원본은 건드리지 않는다) */
-const confOf = (a,b) => confusionFor(a,b) || CONFUSION_EXT[`${a}>${b}`] || null;
-const confListOf = a => {
-  const base = confusableWith(a);
-  const ext  = Object.keys(CONFUSION_EXT).filter(k=>k.startsWith(a+'>')).map(k=>k.split('>')[1]);
-  /* ★원화상 구별 불가능한 쌍은 같은 보기에 넣지 않는다 (context.js §3) */
-  return [...new Set([...base, ...ext])].filter(b => !isExclusive(a,b));
-};
 
 const $ = id => document.getElementById(id);
 const byId = id => SIGNALS.find(s=>s.id===id);
@@ -758,12 +556,6 @@ const TR_DEF = () => ({
 const DEF = { v:5, bond:0, xp:0, bones:0, en:EN_MAX, enT:0, done:[], learned:[], miss:{}, streak:0, lastDay:'',
               sessions:0, best:0, rounds:0, name:'멍이', named:false, mute:false,
               collar:'mint', owned:['mint'], wish:{}, tr:TR_DEF(),
-              /* 첫 실행 진단 (말해보카 FTUE 이식) — done=끝냈는가, q1/q2=온보딩 설문, dx=진단 점수 */
-              intro:{ done:0, q1:'', q2:'', dx:-1 },
-              /* ★간격 반복 — 항목(신호×상황)별 상자와 다음 출제 시각.  srs[itemId] = {b, due}
-                 ★내가 틀린 방식 — wrongAs[정답신호][고른신호] = 횟수. 오답 노트의 재료다.
-                 ☆키는 «추가»만 한다. DEF 에서 키를 지우면 load() 가 저장분을 조용히 버린다. */
-              srs:{}, wrongAs:{},
               q:{day:'',lessons:0,right:0,xp:0,reps:0,succ:0,tone:0,claimed:[]} };
 
 /* ═══ 분석 이벤트 ═══ 배포 후 정부지원 서류에 쓸 리텐션 숫자는 지금부터 쌓아야 한다 */
@@ -814,11 +606,6 @@ function load(){
   if(!Array.isArray(G.owned) || !G.owned.length) G.owned=['mint'];
   if(!G.owned.includes(G.collar)) G.collar='mint';
   if(typeof G.wish!=='object' || !G.wish) G.wish={};
-  /* 기존 사용자는 이미 이름을 지었다 — 진단을 되돌려 세우지 않는다 («끝낸 것»으로 본다) */
-  if(typeof G.intro!=='object' || !G.intro) G.intro={ done: G.named?1:0, q1:'', q2:'', dx:-1 };
-  if(typeof G.intro.done!=='number') G.intro.done = G.named?1:0;
-  if(typeof G.srs!=='object' || !G.srs) G.srs={};
-  if(typeof G.wrongAs!=='object' || !G.wrongAs) G.wrongAs={};
   migrateV5();
   rollQuests();
 }
@@ -884,15 +671,13 @@ function show(id){
   if(id==='home'){ paintHome(); homeDog && homeDog.refit(); }   // 돌아올 때마다 새로 그린다 — 낡은 라벨 금지
   if(id==='train') trainDog && trainDog.refit();
   if(id==='yard') yardDog && yardDog.refit();
-  if(id==='intro') requestAnimationFrame(()=>introDog && introDog.refit());
   if(id!=='yard') closeYard();      // 훈련장을 떠나면 전역 리스너까지 반드시 걷는다
   if(id==='path'){ paintPath();
     requestAnimationFrame(()=>{ const t=document.querySelector('#path .startCard')
       || document.querySelector('#path .halo') || document.querySelector('#pathDone');
       if(t) t.scrollIntoView({block:'center'}); }); }
   if(id==='quest') paintQuests();
-  if(id==='dex'){ paintDex(); paintNoteCard(); }
-  if(id==='note') paintNote();
+  if(id==='dex') paintDex();
   if(id==='shop'){ paintShop(); track('store_view'); }
 }
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>show(t.dataset.go));
@@ -921,7 +706,6 @@ function paintTop(pop){
 /* ═══ 홈 ═══ */
 const PROPS = { pup:['🧸','🪴'], teen:['🌷','🪵'], adult:['🌳','🌼'] };
 function paintHome(){
-  try{ paintNoteCard(); }catch(e){}
   const st = stageFor(G.learned.length);
   const idx = STAGES.indexOf(st);
   const need = [4,8,10][idx], from = [0,4,8][idx];
@@ -1193,95 +977,8 @@ function openDex(s){
   $('dshIcon').textContent = s.emoji; $('dshTitle').textContent = s.name;
   const tb=$('dshTier'); tb.textContent=t.label; tb.style.background=t.color+'22'; tb.style.color=t.color;
   $('dshSee').textContent=s.see; $('dshMean').textContent=s.mean; $('dshTodo').textContent=s.todo;
-  paintCompare(s);
-  const src = SIGNAL_SOURCE[s.id];
-  $('dshSrc').textContent = src ? `출처: ${src}` : '';
   $('dsh').classList.add('on');
-  track('dex_open', {sig:s.id});
 }
-
-/* ★나란히 비교 — 헷갈리는 신호를 좌우로 놓고 차이를 읽는다.
-   얼굴 아틀라스는 5×2 격자다. background-size 500% 200% 에 셀 좌표를 %로 물린다. */
-const FACE_ORDER = SIGNALS.map(s=>s.id);
-function facePos(id){
-  const i = FACE_ORDER.indexOf(id); if(i<0) return '0% 0%';
-  return `${(i%5)*25}% ${Math.floor(i/5)*100}%`;
-}
-function paintCompare(s){
-  const box = $('dshCmp'); box.innerHTML = '';
-  const pairs = confListOf(s.id).map(byId).filter(Boolean).slice(0,3);
-  if(!pairs.length) return;
-  box.innerHTML = '<h4>헷갈리는 신호</h4>';
-  pairs.forEach(o=>{
-    const why = confOf(s.id, o.id);
-    const d = document.createElement('div');
-    d.className = 'cmpRow';
-    d.innerHTML =
-      `<div class="cmpFace" style="background-image:url(./face_atlas.webp);background-position:${facePos(o.id)}"></div>` +
-      `<div class="cmpTxt"><b>${o.emoji} ${o.name}과(와)의 차이</b>${why ? cfill(why,{name:G.name}) : o.see}</div>`;
-    box.appendChild(d);
-  });
-}
-
-/* ═══ 오답 노트 — «내가 어떤 신호를 무엇으로 잘못 읽는가» ═══════════════
-   말해보카에도 오답 노트는 있다. 다만 «내가 틀린 방식»을 집계해 돌려주는 건
-   우리 것이다. 「하품을 기쁨으로 3번 보셨어요」는 문제 목록이 아니라
-   사용자 본인에 대한 발견이고, 그 자체가 학습이다. */
-const cardById = id => id===NOT_SIGNAL.id ? NOT_SIGNAL : byId(id);
-
-function noteRows(){
-  const now = Date.now();
-  return Object.keys(G.wrongAs).map(k=>{
-    const card = cardById(k); if(!card) return null;
-    const picks = Object.entries(G.wrongAs[k]||{})
-      .map(([id,n])=>({ card:cardById(id), n }))
-      .filter(x=>x.card).sort((a,b)=>b.n-a.n);
-    if(!picks.length) return null;
-    const items = ITEMS.filter(it => (it.answer||NOT_SIGNAL.id) === k);
-    const due = items.reduce((m,it)=>Math.min(m, dueOf(it.id)||0), Infinity);
-    const box = Math.min(...items.map(it=>boxOf(it.id)));
-    return { key:k, card, picks, total:picks.reduce((a,b)=>a+b.n,0),
-             due: due===Infinity?0:due, box, ready: (due===Infinity?0:due) <= now };
-  }).filter(Boolean).sort((a,b)=>b.total-a.total);
-}
-
-function paintNote(){
-  const rows = noteRows();
-  const ready = rows.filter(r=>r.ready).length;
-  $('nSum').textContent = rows.length
-    ? `다시 볼 신호 ${rows.length}개 · 오늘 안에 ${ready}개`
-    : '';
-  const L = $('nList'); L.innerHTML='';
-  rows.forEach(r=>{
-    const t = tierOf(r.card.tier);
-    const d = document.createElement('div');
-    d.className='nItem';
-    d.innerHTML =
-      `<div class="nTop"><em>${r.card.emoji}</em><b>${r.card.name}</b>` +
-      `<i style="background:${t.color}22;color:${t.color}">${t.label}</i></div>` +
-      `<div class="nWrong">` +
-        r.picks.map(p=>`<div>«${p.card.name}»${jong(p.card.name)?'으로':'로'} 보셨어요<span>${p.n}번</span></div>`).join('') +
-      `</div>` +
-      `<div class="nDue">🔁 ${r.ready ? '오늘 다시 나와요' : (BOX[r.box]||BOX[0]).label}</div>`;
-    d.onclick = ()=>{ const s = byId(r.key); if(s) openDex(s); };
-    L.appendChild(d);
-  });
-  $('nEmpty').textContent = rows.length ? ''
-    : '아직 쌓인 게 없어요.\n산책에서 신호를 잘못 읽으면 여기에 모입니다 —\n무엇을 무엇으로 착각했는지까지 함께요.';
-  track('note_view', {rows: rows.length});
-}
-function paintNoteCard(){
-  const rows = noteRows();
-  $('noteSub').textContent = rows.length
-    ? `${rows.length}개 · 가장 자주 놓친 건 «${rows[0].card.name}»`
-    : '아직 쌓인 게 없어요';
-  const n = $('noteN');
-  n.textContent = rows.length; n.classList.toggle('on', rows.length>0);
-  /* 도감 탭에도 점을 찍는다 — 볼 게 생겼다는 걸 홈에서 알 수 있어야 한다 */
-  document.querySelector('.tab[data-go="dex"]').classList.toggle('alert', rows.length>0);
-}
-$('noteCard').onclick = ()=>show('note');
-$('nBack').onclick = ()=>show('dex');
 $('dshGo').onclick = ()=>$('dsh').classList.remove('on');
 
 /* ═══ 상점 ═══ 🦴의 사용처. 잠긴 진열대는 그 자체로 과금 수요 조사다 */
@@ -1464,104 +1161,23 @@ $('btnYard').onclick = openYard;
 const ROUND = 5;
 let round = null, lastFx = '';   // lastFx = QA 훅: 마지막 강아지 리액션
 
-/* ═══ 문항 구성 — 항목 = 신호 × 상황 ═══════════════════════════════════
-   출제 순서
-     1) 만기(due ≤ now)가 지난 항목을 상자 낮은 순으로
-     2) 아직 안 만난 항목
-     3) 남으면 만기가 가까운 순
-   그 다음 «인터리빙» — 혼동되는 신호를 일부러 붙여서 낸다.
-   변별 학습 문헌이 가장 강하게 지지하는 배치다 (같은 신호를 몰아 내면 덜 배운다). */
-const srsOf  = id => G.srs[id] || { b:0, due:0 };
-const dueOf  = id => (G.srs[id] ? (G.srs[id].due||0) : 0);
-const boxOf  = id => (G.srs[id] ? (G.srs[id].b  ||0) : 0);
-const seenOf = id => !!G.srs[id];
-
 function pickQuestions(node){
-  const allow = node ? poolFor(node, G.done) : SIGNALS.map(s=>s.id);
-  const pool  = ITEMS.filter(it => allow.includes(it.sig));
-  const src   = pool.length ? pool : ITEMS.slice();
-  const now   = Date.now();
-  const jit   = () => (Math.random()-.5) * 0.6;
-
-  const ready = src.filter(it => seenOf(it.id) && dueOf(it.id) <= now)
-                   .sort((a,b)=> (boxOf(a.id)-boxOf(b.id)) + jit());
-  const fresh = src.filter(it => !seenOf(it.id)).sort(()=>Math.random()-.5);
-  const later = src.filter(it => seenOf(it.id) && dueOf(it.id) > now)
-                   .sort((a,b)=> dueOf(a.id)-dueOf(b.id));
-
-  const line = [...ready, ...fresh, ...later];
-  const out  = [];
-  for (let i=0; i<ROUND; i++) out.push(line[i % line.length]);
-  return interleave(out);
-}
-
-/** 같은 신호를 연달아 내지 않되, 혼동되는 신호끼리는 일부러 붙인다.
-    ★탐욕적으로만 고르면 «남은 게 전부 직전과 같은 신호»인 막다른 길에 몰린다.
-      그래서 배치 뒤에 수선 패스를 한 번 돌려 붙어 버린 자리를 뒤쪽과 맞바꾼다. */
-function interleave(list){
-  const rest = list.slice().sort(()=>Math.random()-.5);
-  const out  = [rest.shift()];
-  while (rest.length){
-    const prev = out[out.length-1].sig;
-    const conf = confListOf(prev);
-    let k = rest.findIndex(it => it.sig !== prev && conf.includes(it.sig));   // 혼동 쌍 우선
-    if (k < 0) k = rest.findIndex(it => it.sig !== prev);                     // 최소한 같은 신호는 피한다
-    if (k < 0) k = 0;
-    out.push(rest.splice(k,1)[0]);
-  }
-  /* 수선 — 붙어 버린 자리를 «앞뒤 어디와 바꿔도 안전한» 항목과 교환한다 */
-  for (let i=1; i<out.length; i++){
-    if (out[i].sig !== out[i-1].sig) continue;
-    for (let j=0; j<out.length; j++){
-      if (j===i || j===i-1) continue;
-      const okAtI = out[j].sig !== out[i-1].sig && (i+1>=out.length || out[j].sig !== out[i+1].sig);
-      const okAtJ = (j===0 || out[j-1].sig !== out[i].sig)
-                 && (j+1>=out.length || out[j+1].sig !== out[i].sig);
-      if (okAtI && okAtJ){ const t=out[i]; out[i]=out[j]; out[j]=t; break; }
-    }
-  }
-  return out;
-}
-
-/** 상자 갱신 + 사람이 읽을 다음 출제 문구 */
-function bumpSrs(itemId, ok){
-  const r = Object.assign({ b:0, due:0 }, G.srs[itemId]);
-  r.b = ok ? Math.min(BOX_MAX, r.b + 1) : 0;
-  const nd = nextDue(r.b, Date.now());
-  r.due = nd.at;
-  G.srs[itemId] = r;
-  return nd.label;
+  const pool = (node ? poolFor(node, G.done) : SIGNALS.map(s=>s.id)).map(byId).filter(Boolean);
+  const src = pool.length ? pool : SIGNALS.slice();
+  // 자꾸 놓친 신호를 앞으로 당긴다 — 복습은 무료로 제공한다
+  const rank = src.slice().sort((a,b)=>((G.miss[b.id]||0)-(G.miss[a.id]||0)) + (Math.random()-.5)*0.8);
+  const out = [];
+  for(let i=0;i<ROUND;i++) out.push(rank[i % rank.length]);
+  return out.sort(()=>Math.random()-.5);
 }
 /* ★선택지가 난이도 사다리를 무너뜨리면 안 된다.
    유닛 1: 이모지 힌트 허용(입문) · 유닛 2~3: 이모지 제거 · 유닛 4·복습: 4지선다까지 */
-const shuf = a => a.slice().sort(()=>Math.random()-.5);
-
-/** 문항의 정답 카드 — 신호이거나 «지금은 신호 아님» */
-const cardOf = item => item.answer ? byId(item.answer) : NOT_SIGNAL;
-
-/* ★보기 구성
-   - 정답이 신호일 때  : 해설이 준비된 혼동 쌍으로 오답을 채운다 (해설 없는 오답은 내지 않는다)
-   - 정답이 «신호 아님»일 때 : 그 그림의 신호 자체를 1번 오답으로 넣는다.
-     「하품 얼굴인데 방금 깼다」에서 «하품(스트레스)»을 고르는 게 정확히 그 오개념이기 때문이다.
-   - 원화상 구별 불가능한 쌍은 confListOf 에서 이미 걸러진다 (context.js §3) */
-function optionsFor(item, node){
+function optionsFor(sig, node){
   const ui = node ? node.ui : 3;                 // 복습은 최고 난이도로 취급
   const count = ui>=3 ? 4 : 3;
   const noEmoji = ui>=1;
-  const right = cardOf(item);
-  let others;
-  if (item.answer){
-    const conf = shuf(confListOf(item.answer).map(byId).filter(Boolean));
-    const rest = shuf(SIGNALS.filter(s => s.id!==item.answer && !conf.includes(s)
-                                          && !isExclusive(item.answer, s.id)));
-    others = [...conf, ...rest].slice(0, count-1);
-  } else {
-    const own  = byId(item.sig);
-    const conf = shuf(confListOf(item.sig).map(byId).filter(Boolean));
-    others = [own, ...conf].slice(0, count-1);
-  }
-  /* 「신호 아님」은 상시 보기로 두지 않는다 — 매번 있으면 그것만 찍는 전략이 생긴다 */
-  return { list: shuf([right, ...others]), noEmoji };
+  const others = SIGNALS.filter(s=>s.id!==sig.id).sort(()=>Math.random()-.5).slice(0,count-1);
+  return { list:[sig,...others].sort(()=>Math.random()-.5), noEmoji };
 }
 
 function startRound(node){
@@ -1576,138 +1192,67 @@ function startRound(node){
 }
 function nextQ(){
   if (round.i >= round.qs.length) return finish();
-  const item = round.qs[round.i];
-  const sig  = byId(item.sig);                 // 화면에 그릴 얼굴은 «상황»이 아니라 «신호»가 정한다
-  const LEN = round.qs.length;                 // 오답은 같은 판에 한 번 더 들어온다
-  const ex = exFor(Math.min(round.i, ROUND-1), ROUND, round.depth);
-  $('progFill').style.width = (round.i/LEN*100)+'%';
-  $('qn').textContent = `${round.i+1}/${LEN}`;
+  const sig = round.qs[round.i];
+  const ex = exFor(round.i, ROUND, round.depth);
+  $('progFill').style.width = (round.i/ROUND*100)+'%';
+  $('qn').textContent = `${round.i+1}/${ROUND}`;
   $('exBadge').textContent = ex>0.75 ? `과장 ${Math.round(ex*100)}% · 크게 보여 줍니다`
     : ex>0.45 ? `과장 ${Math.round(ex*100)}% · 조금 작아졌어요`
     : `과장 ${Math.round(ex*100)}% · 실제 개에 가까워요`;
   $('combo').classList.toggle('on', round.streak>=2);
   $('combo').textContent = `🔥 연속 ${round.streak}`;
-  $('ctx').querySelector('span').textContent = item.ctx;
-  $('ctxNew').classList.toggle('on', !seenOf(item.id));   // 처음 만나는 항목만 (말해보카의 New)
   $('ask').textContent = `지금 ${J(G.name,'은','는')} 어떤 상태일까요?`;
   trainDog && trainDog.play(sig.pose, ex);
-  const { list, noEmoji } = optionsFor(item, round.node);
+  const { list, noEmoji } = optionsFor(sig, round.node);
   const box = $('opts'); box.innerHTML='';
   list.forEach(o=>{
     const b = document.createElement('button');
     b.className='opt';
-    /* «신호 아님» 카드는 이모지를 항상 보여 준다 — 새 개념이라 아이콘이 이해를 돕는다 */
-    const em = (noEmoji && o.id!==NOT_SIGNAL.id) ? '🐾' : o.emoji;
-    b.innerHTML = `<em>${em}</em><span>${o.name}</span>`;
-    b.onclick = ()=>answer(b, o, item, list);
+    b.innerHTML = noEmoji ? `<em>🐾</em><span>${o.name}</span>` : `<em>${o.emoji}</em><span>${o.name}</span>`;
+    b.onclick = ()=>answer(b, o, sig, list);
     box.appendChild(b);
   });
 }
-function answer(btn, chosen, item, opts){
+function answer(btn, chosen, sig, opts){
   const box = $('opts');
-  const right = cardOf(item);
   [...box.children].forEach(c=>{ c.onclick=null; c.classList.add('dim'); });
-  const ok = chosen.id === right.id;
+  const ok = chosen.id === sig.id;
   btn.classList.remove('dim'); btn.classList.add(ok?'right':'wrong');
-  if(!ok){ const ri=opts.indexOf(right); if(box.children[ri]){ box.children[ri].classList.remove('dim'); box.children[ri].classList.add('right'); } }
+  if(!ok){ const ri=opts.indexOf(sig); if(box.children[ri]){ box.children[ri].classList.remove('dim'); box.children[ri].classList.add('right'); } }
   /* ★정답의 첫 보상은 숫자가 아니라 «강아지의 반응»이다 (리뷰 격차 ①) */
   if(ok){ trainDog && trainDog.play(byId('joy').pose, 1); sndOk(); vib(20); lastFx='joy'; }
   else  { trainDog && trainDog.play(byId('curious').pose, 1); sndNo(); vib([25,40,25]); lastFx='huh'; }
-
-  const dueLabel = bumpSrs(item.id, ok);      // 상자 갱신 — 배지에 실제 날짜가 박힌다
-  let gained = 0, reQ = false;
+  let gained = 0;
   if(ok){
     round.right++; round.streak++; round.best=Math.max(round.best,round.streak);
     gained = XP_PER_RIGHT + (round.streak>=3 ? 5 : 0);   // 연속 3개부터 보너스
     round.xp += gained;
-    G.miss[item.sig]=Math.max(0,(G.miss[item.sig]||0)-1);
-    if(item.answer && !G.learned.includes(item.answer)) G.learned.push(item.answer);
+    G.miss[sig.id]=Math.max(0,(G.miss[sig.id]||0)-1);
+    if(!G.learned.includes(sig.id)) G.learned.push(sig.id);
   } else {
-    round.streak=0; round.missed.push(item); G.miss[item.sig]=(G.miss[item.sig]||0)+1;
-    /* ★«내가 틀린 방식»을 쌓는다 — 오답 노트가 «하품을 기쁨으로 3번 보셨어요»를 말할 수 있는 이유 */
-    const k = right.id;
-    G.wrongAs[k] = G.wrongAs[k] || {};
-    G.wrongAs[k][chosen.id] = (G.wrongAs[k][chosen.id]||0) + 1;
-    /* ★상자 0 = «잠시 뒤 다시» — 같은 판 안에서 뒤쪽 한 자리를 이 항목으로 바꾼다.
-       판 길이를 늘리지 않는 이유: 진행바 «3/5»가 도중에 «3/6»이 되면 그건 거짓말이다.
-       마지막 문제에서 틀리면 이번 판에 자리가 없으므로 다음 산책으로 넘긴다 (배지 문구도 그렇게 바뀐다). */
-    const at = Math.min(round.i + 4, round.qs.length - 1);
-    if (at > round.i && round.qs[at].id !== item.id){ round.qs[at] = item; reQ = true; }
+    round.streak=0; round.missed.push(sig); G.miss[sig.id]=(G.miss[sig.id]||0)+1;
   }
-  track('answer', {item:item.id, sig:item.sig, none:!item.answer, ok, chose: chosen.id});
+  track('answer', {sig:sig.id, ok});
   save();
-  /* 배지는 실제로 일어날 일만 말한다 — 이번 판에 다시 나오는가, 다음 산책인가 */
-  const badge = ok ? dueLabel : (reQ ? '잠시 뒤 다시 나와요' : '다음 산책에서 다시 나와요');
-  setTimeout(()=>openFb(ok, item, gained, chosen, badge), 620);
+  setTimeout(()=>openFb(ok, sig, gained), 620);   // 리액션을 잠깐 보여 준 뒤 시트를 연다
 }
-function openFb(ok, item, gained, chosen, dueLabel){
-  const right = cardOf(item);
-  const t = tierOf(right.tier);
+function openFb(ok, sig, gained){
+  const t = tierOf(sig.tier);
   $('fbIcon').textContent = ok?'✅':'💡';
-  $('fbTitle').textContent = ok ? '맞혔어요'
-    : (item.answer ? `이건 «${right.name}»이에요` : '이건 신호가 아니에요');
+  $('fbTitle').textContent = ok?'맞혔어요':`이건 «${sig.name}»이에요`;
   const tb=$('fbTier'); tb.textContent=t.label; tb.style.background=t.color+'22'; tb.style.color=t.color;
   const x=$('fbXp');
   x.style.display = gained ? 'block' : 'none';
   x.textContent = gained>XP_PER_RIGHT ? `+${gained} XP · 연속 ${round.streak} 보너스` : `+${gained} XP`;
-  /* ★오답 특정 피드백 — 내가 고른 답이 «왜 그럴듯했고 왜 틀렸는지». 없으면 조용히 숨긴다.
-     정답이 «신호 아님»일 때는 혼동 문장이 없으므로 상황 해설이 그 역할을 한다. */
-  const why = (!ok && chosen && item.answer) ? confOf(item.answer, chosen.id) : null;
-  $('fbWhyRow').style.display = why ? 'block' : 'none';
-  if (why) $('fbWhy').textContent = cfill(why, { name: G.name });
-  /* ★상황 해설 — 정답이든 오답이든 항상. 「같은 얼굴이라도 상황이 뜻을 바꾼다」를 매번 되짚는다 */
-  $('fbCtxRow').style.display = item.why ? 'block' : 'none';
-  if (item.why) $('fbCtx').textContent = item.why.replace(/\*\*/g,'');
-  $('fbSee').textContent = right.see; $('fbMean').textContent = right.mean; $('fbTodo').textContent = right.todo;
-  /* ★간격 반복을 눈에 보이게 — «나중에»가 아니라 실제 다음 출제일을 말한다 */
-  const ag=$('fbAgain'); ag.classList.toggle('on', !ok);
-  ag.textContent = `🔁 ${dueLabel || '잠시 뒤 다시 나와요'}`;
-  /* ★출처 표기 — 있는 것만. 없는 신호에 가짜 출처를 붙이지 않는다 */
-  const src = item.answer ? SIGNAL_SOURCE[item.answer] : null;
-  $('fbSrc').textContent = src ? `출처: ${src}` : '';
-  $('fbGo').textContent = round.i>=round.qs.length-1 ? '결과 보기' : '다음';
-  paintFbAct(item, right);
+  $('fbSee').textContent = sig.see; $('fbMean').textContent = sig.mean; $('fbTodo').textContent = sig.todo;
+  $('fbGo').textContent = round.i>=ROUND-1 ? '결과 보기' : '다음';
   $('fb').classList.add('on');
-}
-
-/* ★액션 행 — 말해보카 정답 화면의 «다른 예문 · 오답 노트 · 단어 정보» 자리.
-   새 기능을 만드는 게 아니라, 이미 만든 것들의 진입점을 한 줄로 모은다. */
-function paintFbAct(item, right){
-  const alt = $('fbAlt'); alt.classList.remove('on'); alt.innerHTML='';
-  const rows = noteRows();
-  const n = $('fbActN');
-  n.textContent = rows.length; n.classList.toggle('on', rows.length>0);
-  const others = itemsOf(item.sig).filter(x=>x.id!==item.id);
-  const sig = byId(item.sig);
-  $('fbAct').querySelectorAll('button').forEach(b=>{
-    const a = b.dataset.a;
-    const off = (a==='alt' && !others.length) || ((a==='dex'||a==='cmp') && !sig);
-    b.classList.toggle('off', off);
-    b.onclick = off ? null : ()=>{
-      track('fb_act', {a, sig:item.sig});
-      if(a==='alt'){
-        /* 같은 얼굴이 다른 상황에서 어떻게 읽히는지 — 이 앱에서 가장 중요한 대조다 */
-        alt.innerHTML = '<b>같은 모습, 다른 상황</b>' + others.map(o=>{
-          const c = cardOf(o), t = tierOf(c.tier);
-          return `<div><span style="background:${t.color}22;color:${t.color}">${c.name}</span>${o.ctx}</div>`;
-        }).join('');
-        alt.classList.add('on');
-        alt.scrollIntoView({block:'nearest', behavior:'smooth'});
-      }
-      else if(a==='note'){ $('fb').classList.remove('on'); show('note'); }
-      else if(a==='dex' || a==='cmp'){
-        openDex(sig);
-        if(a==='cmp') requestAnimationFrame(()=>{ const c=$('dshCmp'); c && c.scrollIntoView({block:'nearest'}); });
-      }
-    };
-  });
 }
 $('fbGo').onclick = ()=>{ $('fb').classList.remove('on'); round.i++; nextQ(); };
 
 function finish(){
   $('progFill').style.width='100%';
-  const asked = round.qs.length;
-  const rate = Math.round(round.right/asked*100);
+  const rate = Math.round(round.right/ROUND*100);
   const before = stageFor(G.learned.length);
   const refunded = rate===100 ? enRefund() : false;   // 만점이면 ⚡를 돌려준다 — 잘하는 사람에겐 마찰이 없다
 
@@ -1733,7 +1278,7 @@ function finish(){
   $('rTitle').textContent = rate===100?'완벽했어요!':rate>=60?'잘하고 있어요':'천천히 다시 해볼까요';
   $('rSub').textContent = rate===100
     ? (`${G.name}의 신호를 전부 읽어냈어요` + (refunded?' · ⚡1 돌려받았어요':''))
-    : `${asked}개 중 ${round.right}개를 읽어냈어요`;
+    : `${ROUND}개 중 ${round.right}개를 읽어냈어요`;
   $('scRight').textContent = round.right;
   $('scRate').textContent = rate+'%';
   $('scBond').textContent = '+'+bond;
@@ -1753,18 +1298,12 @@ function finish(){
   // 한 판에 같은 신호가 두 번 나올 수 있다 — 목록에 중복으로 쌓지 않는다
   const missUniq = round.missed.filter((s,i,a)=>a.findIndex(x=>x.id===s.id)===i);
   if(missUniq.length){
-    mw.innerHTML = `<h3>다시 볼 것 ${missUniq.length}개</h3>` +
-      missUniq.map(it=>{ const c=cardOf(it);
-        const lb=(BOX[srsOf(it.id).b]||BOX[0]).label;
-        return `<div class="miss"><em>${c.emoji}</em><span><b>${c.name}</b>` +
-               `<small>${it.ctx}</small><small style="color:var(--mint-d);font-weight:900">🔁 ${lb}</small></span></div>`;
-      }).join('') +
-      `<div class="lock" id="rNote" style="cursor:pointer"><em>📓</em><div><b>오답 노트에서 모아 보기</b>` +
-      `<small>내가 어떤 신호를 무엇으로 잘못 읽는지 쌓아 두고 있어요</small></div></div>`;
+    mw.innerHTML = `<h3>놓친 신호 ${missUniq.length}개</h3>` +
+      missUniq.map(s=>`<div class="miss"><em>${s.emoji}</em><span><b>${s.name}</b><small>${s.mean}</small></span></div>`).join('') +
+      `<div class="lock"><em>🔒</em><div><b>이 신호만 모아서 다시 연습하기</b><small>내가 자꾸 놓치는 신호를 집중 훈련하는 기능은 준비 중이에요</small></div></div>`;
   } else {
     mw.innerHTML = `<h3>놓친 신호 없음</h3><div class="miss"><em>✨</em><span><b>전부 읽어냈어요</b><small>다음엔 더 작은 신호에 도전해 보세요</small></span></div>`;
   }
-  const rn=$('rNote'); if(rn) rn.onclick=()=>show('note');
   const nxt = PATH[currentIndex(G.done)];
   $('rAgain').textContent = nxt ? '다음 산책으로' : '복습 산책 한 바퀴';
   $('rHome').textContent = `${G.name}에게 돌아가기`;
@@ -1777,43 +1316,7 @@ const goCurrent = () => { const n = PATH[currentIndex(G.done)];
   if(!enSpend()) return openEnergy();          // 복습 산책도 ⚡1
   startRound(null); };
 $('btnTrain').onclick = goCurrent;
-/* ═══ 이탈 방어 (말해보카 §3-3) ═══
-   손실 회피 + 구체적 잔여 수량. «정말 나가시겠습니까?» 같은 빈 협박이 아니라
-   «몇 개 남았는지»를 말해 준다. confirm() 은 금지 규칙이라 자체 시트로 만든다. */
-let leaveGo = null;
-function openLeaveSheet(title, body, go){
-  leaveGo = go;
-  $('lvTitle').textContent = title;
-  $('lvBody').textContent = body;
-  $('lvsh').classList.add('on');
-}
-function guardLeave(left, go){
-  openLeaveSheet(`${left}개만 더 하면 끝이에요`,
-    `지금 나가면 이번 산책은 기록되지 않아요. ${left}개를 마저 읽으면 ` +
-    `${J(G.name,'이','가')} 오늘 어떤 마음이었는지 전부 알 수 있어요.`, go);
-  trainDog && trainDog.play(byId('earsBack').pose, 1);   // 시무룩 — 우는 마스코트 자리
-  track('leave_guard', { left });
-}
-$('lvStay').onclick = ()=>{
-  $('lvsh').classList.remove('on'); leaveGo=null;
-  track('leave_stay');
-  if (cur==='train'){
-    const sig = round && round.qs && round.qs[round.i];
-    const s2 = sig && byId(sig.sig);
-    if (s2) trainDog && trainDog.play(s2.pose, exFor(Math.min(round.i,ROUND-1), ROUND, round.depth));
-  }
-};
-$('lvOut').onclick = ()=>{
-  $('lvsh').classList.remove('on');
-  track('leave_out');
-  const g = leaveGo; leaveGo = null; if (g) g();
-};
-$('tBack').onclick = ()=>{
-  const left = round ? round.qs.length - round.i : 0;
-  const out = ()=>{ trainDog && trainDog.idle(); show('path'); };
-  /* 첫 문제도 안 풀었으면 잡지 않는다 — 잘못 들어온 사람을 붙잡는 건 무례하다 */
-  if (round && round.i > 0 && left > 0) guardLeave(left, out); else out();
-};
+$('tBack').onclick = ()=>{ trainDog && trainDog.idle(); show('path'); };
 $('rAgain').onclick = goCurrent;
 $('rHome').onclick = ()=>{ show('home');
   say(G.learned.length>=8?'많이 배웠구나!':G.learned.length>=4?'점점 잘 읽네!':'또 만나서 반가워!'); };
@@ -1821,7 +1324,6 @@ $('rHome').onclick = ()=>{ show('home');
 /* ═══ 정보 시트 ═══ */
 function paintInfo(){
   $('ishAbout').textContent = `실제 개 없이, ${J(G.name,'이','가')} 보내는 신호를 읽는 법을 연습하는 앱이에요. 배운 건 밖에서 진짜 개에게 확인해 보세요.`;
-  $('ishSafe').textContent = DISCLAIMER;
   $('muteBtn').textContent = G.mute ? '🔇 소리 꺼짐' : '🔊 소리 켜짐';
 }
 $('btnAbout').onclick = ()=>{ paintInfo(); $('ish').classList.add('on'); };
@@ -1847,229 +1349,6 @@ $('rsBtn').onclick = ()=>{
   wiping = true;
   try{ localStorage.removeItem(KEY); localStorage.removeItem(EVK); }catch(e){}
   location.reload();
-};
-
-/* ═══════════════════════════════════════════════════════════════════════
-   첫 실행 진단 — 말해보카 FTUE 이식 (00_공통/말해보카_FTUE_정밀분석.md §3-2·5·8)
-
-   말해보카가 첫 3분에 한 것: ①질문 개수를 미리 선언하고 ②«??%» 로 궁금하게 만든 뒤
-   ③실패할 수 없는 첫 문제로 한 번 이기게 하고 ④그제서야 진짜 측정을 시킨다.
-   순서를 «설문 → 훈련»에서 «궁금증 → 측정 → 소유»로 바꾸는 게 핵심이다.
-
-   베끼지 않은 것 (§4): 설문 6문항(→2문항), 회원가입(→없음), 다크 톤(→크림 유지),
-   «상위 몇 %»(→ 우리는 비교할 모집단이 없다. 없는 숫자는 만들지 않는다).
-   ═══════════════════════════════════════════════════════════════════════ */
-const IN_Q1 = { ask:'지금 강아지와 어떤 사이인가요?', key:'q1', opts:[
-  {id:'own',  emoji:'🏠', name:'같이 살고 있어요'},
-  {id:'soon', emoji:'📋', name:'입양을 준비 중이에요'},
-  {id:'kid',  emoji:'🧒', name:'아이가 개를 만나요'},
-  {id:'work', emoji:'💼', name:'일로 개를 만나요'},
-]};
-const IN_Q2 = { ask:'어떤 순간이 가장 어려우세요?', key:'q2', opts:[
-  {id:'meet',  emoji:'👋', name:'처음 보는 개를 만났을 때'},
-  {id:'bark',  emoji:'🔊', name:'갑자기 짖거나 으르렁댈 때'},
-  {id:'walk',  emoji:'🦮', name:'산책 중 다른 개와 마주칠 때'},
-  {id:'touch', emoji:'✋', name:'만져도 되는지 모르겠을 때'},
-]};
-/* 진단 5문제 — 쉬움(ok) 1 → 초기 스트레스(caution) 3 → 즉시 멈춤(stop) 1.
-   실력 사다리를 한 판에 다 보여 줘서 «내가 어디까지 읽는지»가 스스로 드러나게 한다. */
-const IN_DX = ['relaxed','lipLick','yawn','lookAway','whaleEye'];
-const IN_LAST = 10;
-let introDog=null, IN = null;
-
-/* ?intro=1 — 첫 실행 진단을 «미리보기»로 다시 본다.
-   판단하려면 여러 번 봐야 하는데, 그때마다 데이터를 지우게 하는 건 말이 안 된다.
-   미리보기에서는 저장을 일절 하지 않고, 끝나면 들어올 때 상태로 되돌린다. */
-const PREVIEW = (()=>{ try{ return new URLSearchParams(location.search).get('intro')==='1'; }
-                       catch(e){ return false; } })();
-let introSnap = null;
-
-function setIntroSay(face, html){ $('inFace').textContent = face; $('inMsg').innerHTML = html; }
-function introShowDog(on){
-  $('inStage').style.display = on ? 'flex' : 'none';
-  /* 강아지가 없는 단계(설문)에서는 보기가 화면 아래로 내려와야 엄지에 닿는다.
-     강아지가 있으면 무대(flex:1)가 여백을 가져가므로 auto 를 걷는다. */
-  $('inOpts').style.marginTop = on ? '' : 'auto';
-  if(on) requestAnimationFrame(()=>introDog && introDog.refit());
-}
-
-function startIntro(preview){
-  const pv = !!preview;
-  IN = { step:0, right:0, answers:{}, locked:false, preview:pv };
-  if(pv) introSnap = JSON.stringify(G);
-  show('intro');
-  if(!introDog){ try{ introDog = createDogView($('introCv')); }catch(e){ introDog=null; } }
-  track('intro_start', { preview:pv });
-  paintIntro();
-}
-/** 미리보기 종료 — 들어올 때의 저장분을 그대로 되돌린다.
-    ★단 ⚡는 예외다. 에너지는 «벽시계»로 회복되는 값이라 되돌리면 회복 시계가
-      과거로 점프한다 — 미리보기를 봤다고 회복이 늦어지면 안 된다.
-      미리보기 중에는 ⚡를 쓰지 않으므로 지금 값을 그대로 들고 나간다. */
-function endPreview(){
-  if(introSnap){
-    try{ const now=G; G=JSON.parse(introSnap); G.en=now.en; G.enT=now.enT; }catch(e){}
-    introSnap=null;
-  }
-  save(); paintTop(); show('home');
-}
-function paintIntro(){
-  const s = IN.step;
-  $('inProgFill').style.width = Math.round(s/IN_LAST*100)+'%';
-  $('inSkip').style.display = s>=IN_LAST ? 'none' : 'block';
-  $('inWhy').classList.remove('on');
-  $('inOpts').innerHTML=''; $('inCard').innerHTML='';
-  $('inAsk').textContent=''; $('inNext').style.display='none'; $('inNext').disabled=false;
-  introShowDog(false);
-  IN.locked = false;
-
-  if(s===0){                                   /* ① 개수를 미리 선언한다 — 끝이 보이면 덜 나간다 */
-    setIntroSay('🐶', '안녕하세요! 저는 곧 <b>당신의 강아지</b>가 될 아이예요.<br>' +
-      '딱 맞는 연습을 골라 드리려고 <b>질문 2개</b>만 여쭤볼게요.');
-    introShowDog(true); introDog && introDog.play(byId('joy').pose, 1);
-    $('inNext').textContent='시작하기'; $('inNext').style.display='block';
-    $('inNext').onclick = ()=>{ IN.step=1; paintIntro(); };
-  }
-  else if(s===1 || s===2){                     /* ② 설문 2문항 — 답은 첫 유닛 카피를 가른다 */
-    const q = s===1 ? IN_Q1 : IN_Q2;
-    setIntroSay('🐶', s===1 ? '먼저, 저를 어디서 만나게 될까요?' : '거의 다 왔어요. 하나만 더요!');
-    $('inAsk').textContent = q.ask;
-    q.opts.forEach(o=>{
-      const b=document.createElement('button'); b.className='opt';
-      b.innerHTML = `<em>${o.emoji}</em><span>${o.name}</span>`;
-      b.onclick = ()=>{
-        if(IN.locked) return; IN.locked = true;
-        [...$('inOpts').children].forEach(c=>c.classList.add('dim'));
-        b.classList.remove('dim'); b.classList.add('right'); sndOk(); vib(15);
-        IN.answers[q.key]=o.id; track('intro_q', {q:q.key, a:o.id});
-        setTimeout(()=>{ IN.step = s+1; paintIntro(); }, 420);
-      };
-      $('inOpts').appendChild(b);
-    });
-  }
-  else if(s===3){                              /* ③ ??% 티저 — 호기심 갭. 잠긴 목록이 다음 목표를 예고 */
-    setIntroSay('🐶', '개는 짖기 전에 <b>먼저 조용히 말해요</b>. ' +
-      '그걸 <b>카밍 시그널</b>이라고 해요 — 지금 몇 개나 읽고 계신지 재 볼까요?');
-    $('inCard').innerHTML =
-      `<div class="tzc">
-         <div class="tzh">🔎 무료 신호 진단<span>약 1분 · 5문제</span></div>
-         <div class="tzr">
-           <div class="tzb"><b>??%</b><small>나의 신호 이해도</small></div>
-           <div class="tzb"><b>??개</b><small>내가 읽는 신호</small></div>
-         </div>
-         <div class="tzl">
-           <div>🔒 나에게 맞는 산책 코스</div>
-           <div>🔒 훈련장 — 명령을 «보내는» 법</div>
-           <div>🔒 신호 도감 10종</div>
-         </div>
-       </div>`;
-    $('inNext').textContent='진단 시작하기'; $('inNext').style.display='block';
-    $('inNext').onclick = ()=>{ IN.step=4; track('intro_dx_start'); paintIntro(); };
-  }
-  else if(s===4){                              /* ④ 각본된 첫 승리 — 실패할 수 없는 문제 하나 */
-    setIntroSay('🐶', '연습으로 한 번만 해볼게요. 지금 제 얼굴을 보세요!');
-    introShowDog(true); introDog && introDog.play(byId('joy').pose, 1);
-    $('inAsk').textContent = '지금 저는 어떤 기분일까요?';
-    const j = byId('joy');
-    const b=document.createElement('button'); b.className='opt';
-    b.innerHTML = `<em>${j.emoji}</em><span>${j.name}</span>`;
-    b.onclick = ()=>{
-      if(IN.locked) return; IN.locked = true;
-      b.classList.add('right'); sndOk(); vib(20);
-      introDog && introDog.play(byId('joy').pose, 1);
-      setIntroSay('🎉', '<b>첫 신호를 읽었어요!</b> 이렇게 하시면 돼요. 이제 진짜로 가볼게요.');
-      $('inAsk').textContent='';
-      $('inNext').textContent='다음'; $('inNext').style.display='block';
-      $('inNext').onclick = ()=>{ IN.step=5; paintIntro(); };
-      track('intro_first_win');
-    };
-    $('inOpts').appendChild(b);
-  }
-  else if(s>=5 && s<IN_LAST){                  /* ⑤ 진단 5문제 — 틀려도 잃는 게 없다 (⚡·XP 없음) */
-    const i = s-5, sig = byId(IN_DX[i]);
-    setIntroSay('🐶', `진단 <b>${i+1}/5</b> · 틀려도 괜찮아요. 어디서부터 시작할지 정하려는 거예요.`);
-    introShowDog(true); introDog && introDog.play(sig.pose, 1);
-    $('inAsk').textContent = '지금 저는 어떤 상태일까요?';
-    const conf = shuf(confusableWith(sig.id).map(byId).filter(Boolean)).slice(0,2);
-    shuf([sig, ...conf]).forEach(o=>{
-      const b=document.createElement('button'); b.className='opt';
-      b.innerHTML = `<em>${o.emoji}</em><span>${o.name}</span>`;
-      b.onclick = ()=> introAnswer(b, o, sig, i);
-      $('inOpts').appendChild(b);
-    });
-  }
-  else {                                       /* ⑥ 결과 — 여기서 ?? 가 숫자로 바뀐다 */
-    const pct = Math.round(IN.right/IN_DX.length*100);
-    if(!IN.preview){ G.intro = { done:1, q1:IN.answers.q1||'', q2:IN.answers.q2||'', dx:IN.right }; save(); }
-    setIntroSay(pct>=80?'🎉':pct>=40?'🐕':'🐶',
-      pct>=80 ? '벌써 잘 읽으시네요! 남은 건 <b>헷갈리는 순간</b>을 가르는 연습이에요.'
-      : pct>=40 ? '읽고 계신 신호가 있어요. <b>비슷해 보이는 신호</b>부터 갈라 볼게요.'
-      : '괜찮아요 — 대부분 여기서 시작해요. 오늘 하나만 확실히 읽고 가요.');
-    $('inCard').innerHTML =
-      `<div class="tzc">
-         <div class="tzh">🔎 진단 결과<span>${IN_DX.length}문제</span></div>
-         <div class="tzr">
-           <div class="tzb"><b id="inPct">0%</b><small>나의 신호 이해도</small></div>
-           <div class="tzb"><b>${IN.right}개</b><small>내가 읽는 신호</small></div>
-         </div>
-         <!-- 잠금 표시는 앱의 실제 해금 규칙과 어긋나면 안 된다.
-              훈련장은 «첫 산책을 끝낸 뒤»에 열리고, 도감은 레슨으로 채워진다. -->
-         <div class="tzl">
-           <div>✅ 나에게 맞는 산책 코스가 열렸어요</div>
-           <div>🔒 훈련장 — 첫 산책을 끝내면 열려요</div>
-           <div>🔒 신호 도감 0/10 — 산책하며 채워요</div>
-         </div>
-       </div>`;
-    countUp($('inPct'), pct);
-    sndTrophy && sndTrophy();
-    track('intro_done', { pct, q1:IN.answers.q1||'', q2:IN.answers.q2||'', preview:!!IN.preview });
-    $('inNext').style.display='block';
-    if(IN.preview){
-      $('inNext').textContent='미리보기 끝 — 돌아가기';
-      $('inNext').onclick = ()=>{ endPreview(); };
-    } else {
-      $('inNext').textContent='이제 이름을 지어 주세요';
-      $('inNext').onclick = ()=>{ show('home'); openNaming(); };
-    }
-  }
-}
-function introAnswer(btn, chosen, sig, i){
-  if(IN.locked) return; IN.locked = true;
-  const box = $('inOpts');
-  [...box.children].forEach(c=>{ c.onclick=null; c.classList.add('dim'); });
-  const ok = chosen.id===sig.id;
-  btn.classList.remove('dim'); btn.classList.add(ok?'right':'wrong');
-  if(!ok){ [...box.children].forEach(c=>{
-    if(c.querySelector('span').textContent===sig.name){ c.classList.remove('dim'); c.classList.add('right'); } }); }
-  if(ok){ IN.right++; sndOk(); vib(20); introDog && introDog.play(byId('joy').pose, 1); }
-  else  { sndNo(); vib([25,40,25]);
-    /* 진단에서도 오답 특정 피드백을 준다 — 측정 중에도 배우는 게 있어야 한다 */
-    const why = confusionFor(sig.id, chosen.id);
-    $('inWhyP').textContent = why ? cfill(why, { name:'저' }) : `이건 «${sig.name}» — ${sig.mean}`;
-    $('inWhy').classList.add('on');
-    /* 놓친 신호는 산책길이 이어받는다 (miss 우선 출제가 이미 돌고 있다) */
-    if(!IN.preview) G.miss[sig.id] = (G.miss[sig.id]||0) + 1;
-  }
-  track('intro_dx', { sig:sig.id, ok, chose:chosen.id, preview:!!IN.preview });
-  if(!IN.preview) save();
-  $('inNext').textContent = i>=IN_DX.length-1 ? '결과 보기' : '다음';
-  $('inNext').style.display='block';
-  $('inNext').onclick = ()=>{ IN.step++; paintIntro(); };
-}
-function countUp(el, to){
-  const t0 = performance.now(), dur = 900;
-  const tick = t => { const p = Math.min(1,(t-t0)/dur);
-    el.textContent = Math.round(to * (1-Math.pow(1-p,3))) + '%';
-    if(p<1) requestAnimationFrame(tick); };
-  requestAnimationFrame(tick);
-}
-$('inSkip').onclick = ()=>{
-  if(IN.preview){ track('intro_skip', { step:IN.step, preview:true }); return endPreview(); }
-  const left = Math.max(0, IN_LAST - IN.step);
-  openLeaveSheet('조금만 더 하면 결과가 나와요',
-    `${left}단계만 지나면 «나의 신호 이해도»가 몇 %인지 알려 드릴 텐데, 지금 그만두시겠어요?`,
-    ()=>{ G.intro.done=1; save(); track('intro_skip', { step:IN.step }); show('home'); openNaming(); });
-  track('intro_skip_ask', { step:IN.step });
 };
 
 /* ═══ 이름 짓기 (첫 실행) ═══ */
@@ -2113,12 +1392,7 @@ try{
   }
   track('boot', {rounds:G.rounds, learned:G.learned.length});
   const d=today();
-  /* 첫 실행 순서 — «궁금증 → 측정 → 소유» (말해보카 이식).
-     이름 짓기는 맨 앞이 아니라 진단 결과 «뒤»에 온다: 내 실력을 알고 나서 짓는 이름이
-     훨씬 «내 개»가 된다. 기존 사용자(G.intro.done)는 이 길을 다시 지나지 않는다. */
-  if(PREVIEW){ setTimeout(()=>startIntro(true), 400); }        // ?intro=1 — 판단용 미리보기
-  else if(!G.named && !G.intro.done){ setTimeout(()=>startIntro(false), 400); }
-  else if(!G.named){ setTimeout(openNaming, 600); }
+  if(!G.named){ setTimeout(openNaming, 600); }   // 첫 실행: 이름부터. «내 개»가 되는 순간
   else setTimeout(()=>{
     if(G.rounds===0) say('처음 만나서 반가워!', 3400);
     else if(G.lastDay===d) say('오늘도 왔구나!');
@@ -2141,18 +1415,6 @@ try{
     /** 명령 숙련도를 바로 세워 둔다 — 해금·Lv3 수신호·마스터 경로 검증용 */
     train:(cmd,m)=>{ G.tr.cmds[cmd] = G.tr.cmds[cmd] || {m:0,lv:0,tries:0,succ:0,masterHits:0};
       G.tr.cmds[cmd].m = m; G.tr.cmds[cmd].lv = lvOf(m); save(); paintHome(); },
-    /* 첫 실행 진단 · 혼동 피드백 QA 훅 */
-    intro:()=>IN, startIntro,
-    items:()=>ITEMS, srs:()=>G.srs, wrongAs:()=>G.wrongAs,
-    review:()=>startRound(null),        /* 결정적 진입 — 복습 한 판 (풀 = 전 신호) */
-    qs:()=>(round?round.qs:null), conf2:(a,b)=>confOf(a,b), conflist:a=>confListOf(a),
-    note:()=>noteRows().map(r=>({k:r.key,total:r.total,picks:r.picks.map(p=>[p.card.id,p.n])})),
-    introStep:n=>{ if(!IN) startIntro(); IN.step=n; paintIntro(); },
-    signals:()=>SIGNALS.map(s=>({id:s.id,name:s.name,tier:s.tier})),
-    conf:(a,b)=>confusionFor(a,b),
-    confusable:a=>confusableWith(a),
-    src:a=>SIGNAL_SOURCE[a]||null,
-    round:()=>round,
   };
   setInterval(()=>{ if(enRegen()){ paintTop(['Energy']); if(cur==='home') paintHome(); } }, 15000);
   if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
